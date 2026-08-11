@@ -3,13 +3,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AppShell } from '@/components/layout/AppShell'
 import { lazy, Suspense } from 'react'
 
-// Lazy-loaded pages for code splitting
+// Lazy-loaded pages
 const AlertQueue = lazy(() => import('@/pages/AlertQueue'))
 const IncidentDetail = lazy(() => import('@/pages/IncidentDetail'))
 const Navigator = lazy(() => import('@/pages/Navigator'))
 const OpsMetrics = lazy(() => import('@/pages/OpsMetrics'))
 const PlaybookLibrary = lazy(() => import('@/pages/PlaybookLibrary'))
 const Settings = lazy(() => import('@/pages/Settings'))
+const LoginPage = lazy(() => import('@/pages/Login'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,68 +44,25 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route
-              path="/alerts"
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <AlertQueue />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/incidents/:id"
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <IncidentDetail />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/incidents"
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <AlertQueue />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/navigator"
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <Navigator />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/ops"
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <OpsMetrics />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/playbooks"
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <PlaybookLibrary />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <Settings />
-                </Suspense>
-              }
-            />
-            <Route path="/" element={<Navigate to="/alerts" replace />} />
-            <Route path="*" element={<Navigate to="/alerts" replace />} />
-          </Route>
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {/* Public route */}
+            <Route path="/login" element={<LoginPage />} />
+
+            {/* Protected routes — AppShell handles auth guard */}
+            <Route element={<AppShell />}>
+              <Route path="/alerts" element={<AlertQueue />} />
+              <Route path="/incidents/:id" element={<IncidentDetail />} />
+              <Route path="/incidents" element={<AlertQueue />} />
+              <Route path="/navigator" element={<Navigator />} />
+              <Route path="/ops" element={<OpsMetrics />} />
+              <Route path="/playbooks" element={<PlaybookLibrary />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/" element={<Navigate to="/alerts" replace />} />
+              <Route path="*" element={<Navigate to="/alerts" replace />} />
+            </Route>
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </QueryClientProvider>
   )
