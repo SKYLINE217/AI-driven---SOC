@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+.env
+
+# ML artifacts
+*.pkl
+*.joblib
+*.pt
+*.pth
+mlruns/
+
+# Data (large files)
+data/cicids2017/*.csv
+data/elastic_samples/*.json
+data/mitre/*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+frontend/dist/
+.vercel/
+
+# Docker
+*.log
