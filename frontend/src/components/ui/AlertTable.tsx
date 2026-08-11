@@ -1,81 +1,38 @@
-import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
-  type SortingState,
-} from '@tanstack/react-table';
+/**
+ * AlertTable — sortable, typed alert table.
+ * Uses plain React state to avoid TanStack Table v8/v9 API churn.
+ */
+
 import type { Alert } from '../../types';
 import SeverityBadge from './SeverityBadge';
 import StatusPill from './StatusPill';
 import TechniqueChip from './TechniqueChip';
 import SparklineScore from './SparklineScore';
 import { formatDistanceToNow } from 'date-fns';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
-const columnHelper = createColumnHelper<Alert>();
+type SortKey = 'severity' | 'timestamp' | 'anomaly_score' | 'status';
+type SortDir = 'asc' | 'desc';
 
-const columns = [
-  columnHelper.accessor('severity', {
-    header: 'Severity',
-    cell: info => <SeverityBadge level={info.getValue()} />,
-    sortingFn: (a, b) => {
-      const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-      return (order[a.original.severity] ?? 5) - (order[b.original.severity] ?? 5);
-    },
-  }),
-  columnHelper.accessor('timestamp', {
-    header: 'Time',
-    cell: info => {
-      const date = new Date(info.getValue());
-      return (
-        <div title={date.toISOString()} style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
-          {formatDistanceToNow(date, { addSuffix: true })}
-        </div>
-      );
-    },
-  }),
-  columnHelper.accessor('entity', {
-    header: 'Entity',
-    cell: info => {
-      const e = info.getValue();
-      const label = e.host || e.user || e.source_ip || 'Unknown';
-      const type = e.host ? '🖥' : e.user ? '👤' : e.source_ip ? '🌐' : '❓';
-      return (
-        <span style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '12px' }}>{type}</span>
-          {label}
-        </span>
-      );
-    },
-  }),
-  columnHelper.display({
-    id: 'technique',
-    header: 'MITRE Technique',
-    cell: ({ row }) => <TechniqueChip id={row.original.technique_id} tactic={row.original.tactic} />,
-  }),
-  columnHelper.display({
-    id: 'score',
-    header: 'Anomaly Score',
-    cell: ({ row }) => <SparklineScore scores={row.original.score_history} current={row.original.anomaly_score} />,
-  }),
-  columnHelper.accessor('status', {
-    header: 'Status',
-    cell: info => <StatusPill status={info.getValue()} />,
-  }),
-  columnHelper.accessor('assignee', {
-    header: 'Assignee',
-    cell: info => (
-      <span style={{ color: info.getValue() ? 'var(--text-primary)' : 'var(--text-muted)', fontSize: '13px' }}>
-        {info.getValue() || '—'}
-      </span>
-    ),
-  }),
-];
-
-/** IDs of alerts newly added via WebSocket (for highlight animation) */
+const SEVERITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 const NEW_ALERT_HIGHLIGHT_MS = 3000;
+
+function sortAlerts(alerts: Alert[], key: SortKey, dir: SortDir): Alert[] {
+  const sorted = [...alerts].sort((a, b) => {
+    let cmp = 0;
+    if (key === 'severity') {
+      cmp = (SEVERITY_ORDER[a.severity] ?? 5) - (SEVERITY_ORDER[b.severity] ?? 5);
+    } else if (key === 'timestamp') {
+      cmp = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+    } else if (key === 'anomaly_score') {
+      cmp = a.anomaly_score - b.anomaly_score;
+    } else if (key === 'status') {
+      cmp = a.status.localeCompare(b.status);
+    }
+    return dir === 'asc' ? cmp : -cmp;
+  });
+  return sorted;
+}
 
 export default function AlertTable({
   alerts,
@@ -84,17 +41,16 @@ export default function AlertTable({
   alerts: Alert[];
   onRowClick: (id: string) => void;
 }) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sortKey, setSortKey] = useState<SortKey>('severity');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
   const prevIdsRef = useRef<Set<string>>(new Set());
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
 
-  // Detect newly added alerts for highlight animation
   useEffect(() => {
     const incoming = new Set(alerts.map(a => a.id));
     const added = [...incoming].filter(id => !prevIdsRef.current.has(id));
     if (added.length > 0 && prevIdsRef.current.size > 0) {
       setNewIds(prev => new Set([...prev, ...added]));
-      // Clear highlight after animation duration
       const timer = setTimeout(() => {
         setNewIds(prev => {
           const next = new Set(prev);
@@ -107,14 +63,17 @@ export default function AlertTable({
     prevIdsRef.current = incoming;
   }, [alerts]);
 
-  const table = useReactTable({
-    data: alerts,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    state: { sorting },
-    onSortingChange: setSorting,
-  });
+  const handleSort = useCallback((key: SortKey) => {
+    setSortKey(prev => {
+      if (prev === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+      else setSortDir('asc');
+      return key;
+    });
+  }, []);
+
+  const sortedAlerts = sortAlerts(alerts, sortKey, sortDir);
+  const sortIndicator = (key: SortKey) =>
+    sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
 
   if (alerts.length === 0) {
     return (
@@ -129,6 +88,18 @@ export default function AlertTable({
     );
   }
 
+  const thStyle: React.CSSProperties = {
+    padding: '14px 20px',
+    fontSize: '11px',
+    color: 'var(--text-muted)',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    whiteSpace: 'nowrap',
+    cursor: 'pointer',
+    userSelect: 'none',
+  };
+
   return (
     <>
       <style>{`
@@ -142,13 +113,7 @@ export default function AlertTable({
         .alert-row:hover {
           background: var(--bg-surface-hover) !important;
         }
-        th.sortable {
-          cursor: pointer;
-          user-select: none;
-        }
-        th.sortable:hover {
-          color: var(--text-primary);
-        }
+        .sort-th:hover { color: var(--text-primary); }
       `}</style>
 
       <div style={{
@@ -163,53 +128,72 @@ export default function AlertTable({
       }}>
         <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', minWidth: '800px' }}>
           <thead style={{ background: 'var(--bg-surface-hover)', borderBottom: '1px solid var(--border-color)', position: 'sticky', top: 0, zIndex: 1 }}>
-            {table.getHeaderGroups().map(headerGroup => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map(header => (
-                  <th
-                    key={header.id}
-                    className={header.column.getCanSort() ? 'sortable' : ''}
-                    onClick={header.column.getToggleSortingHandler()}
-                    style={{
-                      padding: '14px 20px',
-                      fontSize: '11px',
-                      color: 'var(--text-muted)',
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {header.isPlaceholder ? null : (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        {header.column.getIsSorted() === 'asc' ? ' ↑' : header.column.getIsSorted() === 'desc' ? ' ↓' : ''}
-                      </span>
-                    )}
-                  </th>
-                ))}
-              </tr>
-            ))}
+            <tr>
+              <th className="sort-th" style={thStyle} onClick={() => handleSort('severity')}>
+                Severity{sortIndicator('severity')}
+              </th>
+              <th className="sort-th" style={thStyle} onClick={() => handleSort('timestamp')}>
+                Time{sortIndicator('timestamp')}
+              </th>
+              <th style={{ ...thStyle, cursor: 'default' }}>Entity</th>
+              <th style={{ ...thStyle, cursor: 'default' }}>MITRE Technique</th>
+              <th className="sort-th" style={thStyle} onClick={() => handleSort('anomaly_score')}>
+                Anomaly Score{sortIndicator('anomaly_score')}
+              </th>
+              <th className="sort-th" style={thStyle} onClick={() => handleSort('status')}>
+                Status{sortIndicator('status')}
+              </th>
+              <th style={{ ...thStyle, cursor: 'default' }}>Assignee</th>
+            </tr>
           </thead>
           <tbody>
-            {table.getRowModel().rows.map(row => (
-              <tr
-                key={row.id}
-                className={`alert-row${newIds.has(row.original.id) ? ' alert-row-new' : ''}`}
-                onClick={() => onRowClick(row.original.id)}
-                style={{
-                  borderBottom: '1px solid var(--border-color)',
-                  cursor: 'pointer',
-                  transition: 'background 0.15s',
-                }}
-              >
-                {row.getVisibleCells().map(cell => (
-                  <td key={cell.id} style={{ padding: '14px 20px', fontSize: '14px' }}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            {sortedAlerts.map(alert => {
+              const date = new Date(alert.timestamp);
+              const entity = alert.entity;
+              const label = entity?.host || entity?.user || entity?.source_ip || 'Unknown';
+              const type = entity?.host ? '🖥' : entity?.user ? '👤' : entity?.source_ip ? '🌐' : '❓';
+              return (
+                <tr
+                  key={alert.id}
+                  className={`alert-row${newIds.has(alert.id) ? ' alert-row-new' : ''}`}
+                  onClick={() => onRowClick(alert.id)}
+                  style={{
+                    borderBottom: '1px solid var(--border-color)',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s',
+                  }}
+                >
+                  <td style={{ padding: '14px 20px', fontSize: '14px' }}>
+                    <SeverityBadge level={alert.severity} />
                   </td>
-                ))}
-              </tr>
-            ))}
+                  <td style={{ padding: '14px 20px', fontSize: '14px' }}>
+                    <div title={date.toISOString()} style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                      {formatDistanceToNow(date, { addSuffix: true })}
+                    </div>
+                  </td>
+                  <td style={{ padding: '14px 20px', fontSize: '14px' }}>
+                    <span style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '12px' }}>{type}</span>
+                      {label}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 20px', fontSize: '14px' }}>
+                    <TechniqueChip id={alert.technique_id} tactic={alert.tactic} />
+                  </td>
+                  <td style={{ padding: '14px 20px', fontSize: '14px' }}>
+                    <SparklineScore scores={alert.score_history} current={alert.anomaly_score} />
+                  </td>
+                  <td style={{ padding: '14px 20px', fontSize: '14px' }}>
+                    <StatusPill status={alert.status} />
+                  </td>
+                  <td style={{ padding: '14px 20px', fontSize: '14px' }}>
+                    <span style={{ color: alert.assignee ? 'var(--text-primary)' : 'var(--text-muted)', fontSize: '13px' }}>
+                      {alert.assignee || '—'}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
