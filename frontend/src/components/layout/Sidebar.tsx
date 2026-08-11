@@ -1,79 +1,68 @@
-import { NavLink } from 'react-router-dom';
-import { useUiStore } from '../../stores/uiStore';
-import { AlertCircle, FileText, Map, Activity, BookOpen, Settings as SettingsIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { NavLink, useLocation } from 'react-router-dom'
+import { useUIStore } from '@/stores/uiStore'
+import {
+  AlertTriangle,
+  ClipboardList,
+  Map,
+  BarChart3,
+  BookOpen,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Shield,
+} from 'lucide-react'
 
-export default function Sidebar() {
-  const { sidebarCollapsed, toggleSidebar } = useUiStore();
+const NAV_ITEMS = [
+  { to: '/alerts', icon: AlertTriangle, label: 'Alert Queue' },
+  { to: '/incidents', icon: ClipboardList, label: 'Incidents' },
+  { to: '/navigator', icon: Map, label: 'MITRE Navigator' },
+  { to: '/ops', icon: BarChart3, label: 'Ops Metrics' },
+  { to: '/playbooks', icon: BookOpen, label: 'Playbook Library' },
+  { to: '/settings', icon: Settings, label: 'Settings' },
+]
 
-  const navItems = [
-    { icon: AlertCircle, label: 'Alert Queue', path: '/alerts' },
-    { icon: FileText, label: 'Incidents', path: '/incidents' },
-    { icon: Map, label: 'MITRE Navigator', path: '/navigator' },
-    { icon: Activity, label: 'Ops Metrics', path: '/ops' },
-    { icon: BookOpen, label: 'Playbooks', path: '/playbooks' },
-    { icon: SettingsIcon, label: 'Settings', path: '/settings' },
-  ];
+export function Sidebar() {
+  const collapsed = useUIStore((s) => s.sidebarCollapsed)
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar)
+  const location = useLocation()
 
   return (
-    <aside className="glass-panel" style={{
-      width: sidebarCollapsed ? '72px' : '240px',
-      borderRight: '1px solid var(--border-color)',
-      borderTop: 'none',
-      borderBottom: 'none',
-      borderLeft: 'none',
-      transition: 'width var(--transition-normal)',
-      display: 'flex',
-      flexDirection: 'column',
-      padding: '24px 12px',
-      position: 'relative',
-      zIndex: 5
-    }}>
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-        {navItems.map(item => (
-          <NavLink 
-            key={item.path} 
-            to={item.path}
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px',
-              padding: '12px',
-              borderRadius: 'var(--radius-md)',
-              color: isActive ? 'var(--color-primary)' : 'var(--text-secondary)',
-              background: isActive ? 'var(--bg-surface-hover)' : 'transparent',
-              fontWeight: isActive ? 600 : 500,
-              transition: 'all var(--transition-fast)',
-              overflow: 'hidden',
-              whiteSpace: 'nowrap'
-            })}
+    <aside className={`app-sidebar ${collapsed ? 'collapsed' : ''}`}>
+      {/* Logo */}
+      <div className="sidebar-logo">
+        <div className="sidebar-logo-icon">
+          <Shield size={18} />
+        </div>
+        <span className="sidebar-logo-text">SOC Triager</span>
+      </div>
+
+      {/* Navigation */}
+      <nav className="sidebar-nav">
+        {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              `sidebar-link ${isActive ? 'active' : ''}`
+            }
+            title={collapsed ? label : undefined}
           >
-            <item.icon size={22} style={{ flexShrink: 0 }} />
-            {!sidebarCollapsed && <span style={{ opacity: sidebarCollapsed ? 0 : 1, transition: 'opacity var(--transition-normal)' }}>{item.label}</span>}
+            <span className="sidebar-link-icon">
+              <Icon size={20} />
+            </span>
+            <span className="sidebar-link-text">{label}</span>
           </NavLink>
         ))}
       </nav>
 
-      <button 
+      {/* Collapse toggle */}
+      <button
+        className="sidebar-collapse-btn"
         onClick={toggleSidebar}
-        style={{
-          background: 'var(--bg-surface-hover)',
-          border: '1px solid var(--border-color)',
-          color: 'var(--text-secondary)',
-          cursor: 'pointer',
-          borderRadius: '50%',
-          width: '32px',
-          height: '32px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          position: 'absolute',
-          right: '-16px',
-          bottom: '32px',
-          zIndex: 10
-        }}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
-        {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
       </button>
     </aside>
-  );
+  )
 }

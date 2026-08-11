@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'faust-worker'
+    static_configs:
+      - targets: ['host.docker.internal:6066']
+    metrics_path: /metrics
+
+  - job_name: 'scoring-api'
+    static_configs:
+      - targets: ['host.docker.internal:8001']
+    metrics_path: /metrics
+
+  - job_name: 'incident-api'
+    static_configs:
+      - targets: ['host.docker.internal:8000']
+    metrics_path: /metrics

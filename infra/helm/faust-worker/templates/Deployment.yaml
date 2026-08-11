@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: faust-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: faust-worker
+  template:
+    metadata:
+      labels:
+        app: faust-worker
+    spec:
+      containers:
+        - name: faust-worker
+          image: "soc-triager/faust-worker:latest"
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10

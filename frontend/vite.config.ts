@@ -1,21 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: { '@': path.resolve(__dirname, './src') },
+  },
   server: {
+    port: 5173,
     proxy: {
-      // Proxy REST API calls to FastAPI backend (dev only)
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
-      // Proxy WebSocket connections to FastAPI backend (dev only)
       '/ws': {
         target: 'ws://localhost:8000',
         ws: true,
-        changeOrigin: true,
       },
     },
   },

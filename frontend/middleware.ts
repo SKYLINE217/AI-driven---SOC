@@ -1,46 +1,37 @@
-/**
- * Vercel Edge Middleware — JWT validation + rate limiting.
- *
- * Runs at the edge before any serverless function or static asset.
- * - On /api/* routes (except /api/auth/login): validates the Bearer JWT.
- * - Applies a simple per-IP rate limit (100 req/min via an in-memory counter;
- *   for production, use Vercel KV or Upstash Redis).
- *
- * Note: The WebSocket upgrade (/ws/*) is NOT proxied through Vercel —
- * the frontend connects directly to the backend WS server in production
- * via a subdomain (e.g., api.soctriager.com/ws/alerts).
- */
-
-import { NextResponse, type NextRequest } from 'next/server';
-
-const PUBLIC_PATHS = ['/api/auth/login', '/login', '/health'];
-
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  // Skip public paths
-  if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
-    return NextResponse.next();
-  }
-
-  // Only gate /api/* routes
-  if (!pathname.startsWith('/api/')) {
-    return NextResponse.next();
-  }
-
-  // Check Authorization header
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json(
-      { error: 'Unauthorized — missing Bearer token' },
-      { status: 401 }
-    );
-  }
-
-  // Pass through with the auth header preserved
-  return NextResponse.next();
-}
+import { jwtVerify } from 'jose'
 
 export const config = {
-  matcher: ['/api/:path*'],
-};
+  matcher: '/api/:path*',
+}
+
+export default async function middleware(req: Request) {
+  const url = new URL(req.url)
+
+  // Public routes
+  if (url.pathname === '/api/auth/login') {
+    return fetch(req)
+  }
+
+  const authHeader = req.headers.get('authorization')
+  if (!authHeader?.startsWith('Bearer ')) {
+    return Response.json({ error: { code: 'UNAUTHORIZED' } }, { status: 401 })
+  }
+
+  const token = authHeader.slice(7)
+  const secret = process.env.JWT_SECRET
+
+  if (!secret) {
+    return Response.json({ error: { code: 'INTERNAL', message: 'Missing JWT_SECRET' } }, { status: 500 })
+  }
+
+  try {
+    const encodedSecret = new TextEncoder().encode(secret)
+    await jwtVerify(token, encodedSecret)
+    
+    // In a real implementation, you'd add rate limiting via Upstash Redis here
+    
+    return fetch(req) // Pass through to the API route
+  } catch (err) {
+    return Response.json({ error: { code: 'UNAUTHORIZED' } }, { status: 401 })
+  }
+}

@@ -18,28 +18,36 @@ mlruns/
 mlartifacts/
 mlflow.db
 
-# Data (large files)
+# Data (large files — download separately)
 data/cicids2017/*.csv
 data/elastic_samples/*.json
+data/elastic_samples/
 data/mitre/*.json
+
+# Dependencies
+node_modules/
+
+# Environment
+backend/.env
 
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Node
-node_modules/
+# Node / Frontend
 frontend/dist/
 .vercel/
 
-# Docker
+# Docker / Volumes
 *.log
+backend/postgres_data/
+backend/redis_data/
+backend/redpanda_data/
+backend/mlflow_data/
 
 # Tests / scratch
 .pytest_cache/
@@ -47,7 +55,14 @@ frontend/dist/
 verify_day1.py
 htmlcov/
 .coverage
+coverage/
+playwright-report/
+test-results/
 
 # Secrets — double-check these are never committed
 *.env.*
 !.env.example
+
+# Misc
+.agents/
+plan/

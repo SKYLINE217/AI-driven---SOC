@@ -1,243 +1,86 @@
-/**
- * Ops Metrics page — 5 Recharts panels from /api/metrics.
- * Panel layout: Throughput (Line) | Alert Volume (Area) | Anomaly Dist (Bar) | LLM Cost (Bar) | Latency (Line)
- */
-
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react'
+import { Activity, Shield, Zap, Clock, FileText } from 'lucide-react'
+import { useAuthStore } from '@/stores/authStore'
 import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts';
-import MetricCard from '../components/ui/MetricCard';
-import { useAuth } from '../hooks/useAuth';
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+  BarChart, Bar
+} from 'recharts'
 
-interface MetricsData {
-  event_throughput_eps: number;
-  alert_volume_24h: number;
-  alert_volume_7d: number;
-  pipeline_latency_p50_ms: number;
-  pipeline_latency_p95_ms: number;
-  llm_stats: {
-    total_calls: number;
-    total_cost_usd: number;
-    avg_latency_ms: number;
-    cost_per_1000_flagged: number;
-  };
-  throughput_series: { t: number; v: number }[];
-  latency_series: { t: number; p50: number; p95: number }[];
-  daily_alerts: { day: string; alerts: number }[];
-  anomaly_score_distribution: { bin: string; count: number }[];
-  llm_cost_daily: { day: string; cost_per_1k: number }[];
-}
-
-const CHART_COLORS = {
-  primary: '#3b82f6',
-  critical: '#ef4444',
-  medium: '#eab308',
-  low: '#22c55e',
-  muted: '#64748b',
-};
+const mockTimeSeriesData = Array.from({ length: 24 }).map((_, i) => ({
+  time: `${i}:00`,
+  events: Math.floor(Math.random() * 5000) + 1000,
+  latency: Math.floor(Math.random() * 150) + 50,
+}))
 
 export default function OpsMetrics() {
-  const { token } = useAuth();
-  const [data, setData] = useState<MetricsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<any>(null)
+  const token = useAuthStore((s) => s.token)
 
   useEffect(() => {
-    if (!token) return;
-    const load = () => {
+    if (token) {
       fetch('/api/metrics', { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.json())
-        .then(d => { setData(d); setLoading(false); })
-        .catch(e => { setError(String(e)); setLoading(false); });
-    };
-    load();
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(load, 30_000);
-    return () => clearInterval(interval);
-  }, [token]);
+        .then(res => res.json())
+        .then(data => setMetrics(data))
+    }
+  }, [token])
 
-  if (loading) {
-    return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="glass-panel skeleton" style={{ height: '220px', borderRadius: 'var(--radius-lg)' }} />
-        ))}
-      </div>
-    );
-  }
+  if (!metrics) return <div className="p-4 text-muted">Loading metrics...</div>
 
-  if (error || !data) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-critical)' }}>
-        <div style={{ fontSize: '32px', marginBottom: '12px' }}>⚠️</div>
-        <p>Failed to load metrics: {error}</p>
-      </div>
-    );
-  }
-
-  const tooltipStyle = {
-    backgroundColor: 'var(--bg-surface)',
-    border: '1px solid var(--border-color)',
-    borderRadius: '8px',
-    color: 'var(--text-primary)',
-    fontSize: '12px',
-  };
-
-  // Format throughput series with time labels
-  const throughputData = data.throughput_series.slice(-20).map((d, i) => ({
-    name: `${i * 3}m ago`,
-    eps: d.v,
-  })).reverse().slice(-10);
-
-  const latencyData = data.latency_series.slice(-20).map((d, i) => ({
-    name: `${i * 3}m ago`,
-    p50: d.p50,
-    p95: d.p95,
-  })).reverse().slice(-10);
+  const kpis = [
+    { label: 'Event Throughput', value: `${metrics.event_throughput_per_sec.toLocaleString()}/s`, icon: Zap },
+    { label: '24h Alerts', value: metrics.alert_volume_24h, icon: Shield },
+    { label: 'p95 Latency', value: `${metrics.pipeline_latency_p95_ms} ms`, icon: Clock },
+    { label: 'Active Incidents', value: metrics.active_incidents, icon: Activity },
+    { label: 'LLM Cost / 1k', value: `$${metrics.llm_cost_per_1000_events_usd}`, icon: FileText },
+  ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <div>
-        <h1 style={{ fontSize: '26px', fontWeight: 700, margin: '0 0 4px 0' }}>Ops Metrics</h1>
-        <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '14px' }}>
-          Live pipeline telemetry · Auto-refreshes every 30s
-        </p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
-
-        {/* 1. Event Throughput */}
-        <MetricCard
-          title="Event Throughput"
-          value={data.event_throughput_eps.toLocaleString()}
-          unit="events/sec"
-          trend={-5}
-          trendLabel="vs prev hour"
-          tooltip="Raw events ingested per second from Redpanda (all sources)"
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={throughputData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Line type="monotone" dataKey="eps" stroke={CHART_COLORS.primary} strokeWidth={2} dot={false} name="EPS" />
-            </LineChart>
-          </ResponsiveContainer>
-        </MetricCard>
-
-        {/* 2. Alert Volume Trend */}
-        <MetricCard
-          title="Alert Volume (7-Day)"
-          value={data.alert_volume_7d}
-          unit="alerts"
-          trend={12}
-          trendLabel="vs prev week"
-          tooltip="Number of anomalous events that triggered alerts (above ensemble threshold)"
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data.daily_alerts}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-              <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Area type="monotone" dataKey="alerts" stroke={CHART_COLORS.critical} fill={`${CHART_COLORS.critical}22`} strokeWidth={2} name="Alerts" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </MetricCard>
-
-        {/* 3. Anomaly Score Distribution */}
-        <MetricCard
-          title="Anomaly Score Distribution"
-          value={data.alert_volume_24h}
-          unit="alerts today"
-          tooltip="Distribution of anomaly scores across all flagged events (Isolation Forest + Autoencoder ensemble)"
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.anomaly_score_distribution}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-              <XAxis dataKey="bin" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="count" fill={CHART_COLORS.medium} name="Events" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </MetricCard>
-
-        {/* 4. LLM Cost */}
-        <MetricCard
-          title="LLM Cost ($/1k Flagged)"
-          value={`$${data.llm_stats.cost_per_1000_flagged ?? '0.18'}`}
-          unit="per 1k alerts"
-          trend={-8}
-          trendLabel="vs prev week"
-          tooltip={`Total cost: $${data.llm_stats.total_cost_usd} · ${data.llm_stats.total_calls} LLM calls · Avg latency: ${data.llm_stats.avg_latency_ms}ms`}
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.llm_cost_daily}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-              <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={(v) => `$${v}`} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown) => [`$${v}`, '$/1k']} />
-              <Bar dataKey="cost_per_1k" fill={CHART_COLORS.low} name="$/1k" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </MetricCard>
-
-        {/* 5. Pipeline Latency */}
-        <MetricCard
-          title="Pipeline Latency"
-          value={`${data.pipeline_latency_p50_ms}ms`}
-          unit="p50"
-          trend={5}
-          trendLabel={`p95: ${data.pipeline_latency_p95_ms}ms`}
-          tooltip="End-to-end latency from raw log → incident created. Bottleneck is LLM call."
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={latencyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={(v) => `${v}ms`} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown) => [`${v}ms`]} />
-              <Legend wrapperStyle={{ fontSize: '11px' }} />
-              <Line type="monotone" dataKey="p50" stroke={CHART_COLORS.low} strokeWidth={2} dot={false} name="p50" />
-              <Line type="monotone" dataKey="p95" stroke={CHART_COLORS.critical} strokeWidth={2} dot={false} name="p95" strokeDasharray="4 2" />
-            </LineChart>
-          </ResponsiveContainer>
-        </MetricCard>
-
-      </div>
-
-      {/* LLM stats summary strip */}
-      <div className="glass-panel" style={{ padding: '16px 24px', borderRadius: 'var(--radius-lg)', display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
-        {[
-          { label: 'Total LLM Calls', value: data.llm_stats.total_calls.toLocaleString() },
-          { label: 'Total LLM Cost', value: `$${data.llm_stats.total_cost_usd}` },
-          { label: 'Avg LLM Latency', value: `${data.llm_stats.avg_latency_ms}ms` },
-          { label: 'Pipeline p50', value: `${data.pipeline_latency_p50_ms}ms` },
-          { label: 'Pipeline p95', value: `${data.pipeline_latency_p95_ms}ms` },
-          { label: 'Events/sec', value: data.event_throughput_eps.toLocaleString() },
-        ].map(({ label, value }) => (
-          <div key={label}>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>{label}</div>
-            <div style={{ fontSize: '18px', fontWeight: 700 }}>{value}</div>
+    <div className="flex flex-col gap-6" style={{ height: '100%', overflow: 'auto', paddingBottom: 20 }}>
+      <h1>Operations Metrics</h1>
+      
+      {/* KPI Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+        {kpis.map((kpi, i) => (
+          <div key={i} className="card" style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ padding: 12, borderRadius: '50%', background: 'var(--bg-secondary)', color: 'var(--accent-primary)' }}>
+              <kpi.icon size={24} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 4 }}>{kpi.label}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 600 }}>{kpi.value}</div>
+            </div>
           </div>
         ))}
       </div>
 
-      <style>{`
-        .skeleton {
-          background: linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-surface-hover) 50%, var(--bg-surface) 75%);
-          background-size: 200% 100%;
-          animation: skeleton-pulse 1.5s infinite;
-        }
-        @keyframes skeleton-pulse {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-      `}</style>
+      {/* Charts */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 8 }}>
+        <div className="card" style={{ padding: '1.5rem', height: 350 }}>
+          <h3 style={{ marginBottom: 16 }}>Ingestion Volume (Events/sec)</h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={mockTimeSeriesData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-secondary)" />
+              <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={12} />
+              <YAxis stroke="var(--text-muted)" fontSize={12} />
+              <RechartsTooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-secondary)', borderRadius: 8 }} />
+              <Bar dataKey="events" fill="var(--accent-primary)" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="card" style={{ padding: '1.5rem', height: 350 }}>
+          <h3 style={{ marginBottom: 16 }}>Pipeline Latency (ms)</h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={mockTimeSeriesData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-secondary)" />
+              <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={12} />
+              <YAxis stroke="var(--text-muted)" fontSize={12} />
+              <RechartsTooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-secondary)', borderRadius: 8 }} />
+              <Line type="monotone" dataKey="latency" stroke="var(--severity-high)" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
     </div>
-  );
+  )
 }

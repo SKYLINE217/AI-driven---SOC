@@ -1,58 +1,69 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import AppShell from './components/layout/AppShell';
-import AlertQueue from './pages/AlertQueue';
-import IncidentDetail from './pages/IncidentDetail';
-import OpsMetrics from './pages/OpsMetrics';
-import Navigator from './pages/Navigator';
-import PlaybookLibrary from './pages/PlaybookLibrary';
-import Settings from './pages/Settings';
-import Login from './pages/Login';
-import './styles/globals.css';
-import { useEffect } from 'react';
-import { useUiStore } from './stores/uiStore';
-import { useAuthStore } from './stores/authStore';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AppShell } from '@/components/layout/AppShell'
+import { lazy, Suspense } from 'react'
 
-/** Route guard: redirects unauthenticated users to /login */
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const token = useAuthStore(state => state.token);
-  if (!token) return <Navigate to="/login" replace />;
-  return <>{children}</>;
-}
+// Lazy-loaded pages
+const AlertQueue = lazy(() => import('@/pages/AlertQueue'))
+const IncidentDetail = lazy(() => import('@/pages/IncidentDetail'))
+const Navigator = lazy(() => import('@/pages/Navigator'))
+const OpsMetrics = lazy(() => import('@/pages/OpsMetrics'))
+const PlaybookLibrary = lazy(() => import('@/pages/PlaybookLibrary'))
+const Settings = lazy(() => import('@/pages/Settings'))
+const LoginPage = lazy(() => import('@/pages/Login'))
 
-function App() {
-  const darkMode = useUiStore(state => state.darkMode);
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 10_000,
+      retry: 2,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
-  }, [darkMode]);
-
+function PageLoader() {
   return (
-    <Router>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={<Login />} />
-
-        {/* Protected routes — require JWT */}
-        <Route path="/" element={
-          <ProtectedRoute>
-            <AppShell />
-          </ProtectedRoute>
-        }>
-          <Route index element={<Navigate to="/alerts" replace />} />
-          <Route path="alerts" element={<AlertQueue />} />
-          <Route path="incidents" element={<Navigate to="/alerts" replace />} />
-          <Route path="incidents/:id" element={<IncidentDetail />} />
-          <Route path="navigator" element={<Navigator />} />
-          <Route path="ops" element={<OpsMetrics />} />
-          <Route path="playbooks" element={<PlaybookLibrary />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-
-        {/* Catch-all */}
-        <Route path="*" element={<Navigate to="/alerts" replace />} />
-      </Routes>
-    </Router>
-  );
+    <div className="page-stub">
+      <div
+        style={{
+          width: 32,
+          height: 32,
+          border: '3px solid var(--border-secondary)',
+          borderTopColor: 'var(--accent-primary)',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite',
+        }}
+      />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
 }
 
-export default App;
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {/* Public route */}
+            <Route path="/login" element={<LoginPage />} />
+
+            {/* Protected routes — AppShell handles auth guard */}
+            <Route element={<AppShell />}>
+              <Route path="/alerts" element={<AlertQueue />} />
+              <Route path="/incidents/:id" element={<IncidentDetail />} />
+              <Route path="/incidents" element={<AlertQueue />} />
+              <Route path="/navigator" element={<Navigator />} />
+              <Route path="/ops" element={<OpsMetrics />} />
+              <Route path="/playbooks" element={<PlaybookLibrary />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/" element={<Navigate to="/alerts" replace />} />
+              <Route path="*" element={<Navigate to="/alerts" replace />} />
+            </Route>
+          </Routes>
+        </Suspense>
+      </BrowserRouter>
+    </QueryClientProvider>
+  )
+}

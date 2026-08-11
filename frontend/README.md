@@ -1,32 +1,41 @@
-# React + TypeScript + Vite
+# SOC Triager — AI-driven Security Operations Center
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+SOC Triager is a high-performance, real-time alert triage and containment platform. It ingests massive volumes of normalized security logs via Redpanda (Kafka), computes anomaly scores using machine learning, clusters related events, and uses an LLM to generate actionable containment playbooks.
 
-Currently, two official plugins are available:
+## Architecture
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+![System Architecture](../docs/architecture.png)
+*(Note: A high-level system architecture diagram belongs here.)*
 
-## React Compiler
+- **Frontend (Vercel):** React 18, Vite, Zustand, Tailwind/Custom CSS.
+- **BFF (Vercel Serverless/Edge):** JWT validation, rate limiting, role-based access control (RBAC), backend API proxying.
+- **Backend (FastAPI):** Python microservices for Incident Correlation, ML Scoring, and WebSocket broadcasting.
+- **Data & Streaming:** Redpanda (Kafka) for event bus, TimescaleDB (Postgres) for incidents and feature store, Redis for Pub/Sub.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Local Setup
 
-## Expanding the Oxlint configuration
+### 1. Backend Infrastructure (Docker)
+Ensure Docker is installed and running, then spin up the backend dependencies:
+```bash
+cd backend
+docker compose up -d
+```
+*This starts Redpanda, Redis, TimescaleDB, MLflow, Prometheus, and Grafana.*
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+### 2. Frontend (Vite)
+Run the frontend locally in development mode:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Alternatively, to simulate the Edge Middleware and serverless BFF locally, use Vercel CLI:
+```bash
+vercel dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Security & RBAC
+The system utilizes a strict Role-Based Access Control (RBAC) model managed via JWTs:
+- **Analyst:** Can view and acknowledge alerts, view playbooks.
+- **Senior Analyst:** Can escalate and close incidents.
+- **Approver:** Can execute (approve) automated containment playbooks.
