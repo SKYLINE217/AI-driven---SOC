@@ -3,7 +3,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.egg-info/
-dist/
 build/
 *.egg
 .venv/
@@ -16,6 +15,8 @@ venv/
 *.pt
 *.pth
 mlruns/
+mlartifacts/
+mlflow.db
 
 # Data (large files)
 data/cicids2017/*.csv
@@ -39,3 +40,14 @@ frontend/dist/
 
 # Docker
 *.log
+
+# Tests / scratch
+.pytest_cache/
+.mypy_cache/
+verify_day1.py
+htmlcov/
+.coverage
+
+# Secrets — double-check these are never committed
+*.env.*
+!.env.example

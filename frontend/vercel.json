@@ -1,0 +1,35 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/auth/:path*",
+      "destination": "/api/auth/[...path]"
+    },
+    {
+      "source": "/api/alerts/:path*",
+      "destination": "/api/alerts/[...path]"
+    },
+    {
+      "source": "/api/incidents/:path*",
+      "destination": "/api/incidents/[...path]"
+    },
+    {
+      "source": "/api/metrics",
+      "destination": "/api/metrics"
+    },
+    {
+      "source": "/api/navigator/:path*",
+      "destination": "/api/navigator/[...path]"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ],
+  "framework": "vite"
+}
