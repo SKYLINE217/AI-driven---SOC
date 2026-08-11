@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+backend/.env
+
+# Build
+frontend/dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# MLflow
+mlruns/
+mlflow.db
+
+# Data (large files — download separately)
+data/cicids2017/*.csv
+data/elastic_samples/
+
+# Docker volumes
+backend/postgres_data/
+backend/redis_data/
+backend/redpanda_data/
+backend/mlflow_data/
+
+# Test
+coverage/
+playwright-report/
+test-results/
+
+# Misc
+*.log
+.agents/
+plan/
