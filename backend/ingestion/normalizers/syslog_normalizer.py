@@ -7,7 +7,7 @@ Handles standard syslog format:
 """
 
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 
 from backend.models import (
@@ -44,11 +44,11 @@ SSH_SUCCESS_RE = re.compile(
 
 def _parse_bsd_timestamp(month: str, day: str, time_str: str) -> datetime:
     """Parse BSD syslog timestamp, assuming current year."""
-    year = datetime.utcnow().year
+    year = datetime.now(UTC).year
     try:
         return datetime.strptime(f"{year} {month} {day} {time_str}", "%Y %b %d %H:%M:%S")
     except ValueError:
-        return datetime.utcnow()
+        return datetime.now(UTC)
 
 
 def _extract_ssh_context(message: str) -> dict:
@@ -97,7 +97,7 @@ def normalize_syslog(raw_line: str) -> NormalizedEvent:
     hostname = "unknown"
     program = "unknown"
     message = raw_line
-    timestamp = datetime.utcnow()
+    timestamp = datetime.now(UTC)
 
     # Try BSD format first (more common in auth.log-style syslog)
     bsd_match = BSD_SYSLOG_RE.match(raw_line)
@@ -121,7 +121,7 @@ def normalize_syslog(raw_line: str) -> NormalizedEvent:
             try:
                 timestamp = datetime.fromisoformat(ts_str.replace("Z", "+00:00")).replace(tzinfo=None)
             except ValueError:
-                timestamp = datetime.utcnow()
+                timestamp = datetime.now(UTC)
 
     # Extract SSH-specific context from the message body
     ssh_ctx = _extract_ssh_context(message)

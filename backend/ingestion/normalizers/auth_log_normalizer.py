@@ -10,7 +10,7 @@ Handles common auth.log patterns:
 """
 
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 
 from backend.models import (
     DestinationInfo,
@@ -63,11 +63,11 @@ PAM_FAILURE_RE = re.compile(
 
 def _parse_auth_timestamp(month: str, day: str, time_str: str) -> datetime:
     """Parse auth.log timestamp (BSD syslog format), assuming current year."""
-    year = datetime.utcnow().year
+    year = datetime.now(UTC).year
     try:
         return datetime.strptime(f"{year} {month} {day} {time_str}", "%Y %b %d %H:%M:%S")
     except ValueError:
-        return datetime.utcnow()
+        return datetime.now(UTC)
 
 
 def _classify_auth_message(message: str, program: str) -> dict:
@@ -182,7 +182,7 @@ def normalize_auth_log(raw_line: str) -> NormalizedEvent:
     hostname = "unknown"
     program = "unknown"
     message = raw_line
-    timestamp = datetime.utcnow()
+    timestamp = datetime.now(UTC)
 
     # Parse the syslog-style header
     header_match = AUTH_HEADER_RE.match(raw_line)

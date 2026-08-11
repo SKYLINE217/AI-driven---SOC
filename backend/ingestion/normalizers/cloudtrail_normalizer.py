@@ -14,7 +14,7 @@ CloudTrail events have a well-defined JSON schema:
 """
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from backend.models import (
@@ -118,7 +118,7 @@ def normalize_cloudtrail(raw_input: str | dict) -> NormalizedEvent:
         except json.JSONDecodeError:
             # Malformed JSON — create a minimal event
             return NormalizedEvent(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 event=EventInfo(
                     kind="event",
                     category=["process"],
@@ -138,7 +138,7 @@ def normalize_cloudtrail(raw_input: str | dict) -> NormalizedEvent:
             event.get("eventTime", "").replace("Z", "+00:00")
         ).replace(tzinfo=None)
     except (ValueError, AttributeError):
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(UTC)
 
     # Map event name to ECS action and category
     event_name = event.get("eventName", "unknown_action")

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -147,7 +147,7 @@ class NormalizedEvent(BaseModel):
     log: LogInfo = Field(default_factory=LogInfo)
     related: RelatedInfo = Field(default_factory=RelatedInfo)
 
-    model_config = {"json_encoders": {datetime: lambda v: v.isoformat() + "Z"}}
+    model_config = {"ser_json_timedelta": "iso8601"}
 
     def compute_chain_hash(self) -> str:
         """Compute SHA-256 hash of the event for chain-of-custody."""
@@ -285,7 +285,7 @@ class LedgerEntry(BaseModel):
 class LLMCallLog(BaseModel):
     """Record of a single LLM API call for cost/latency tracking."""
     id: UUID = Field(default_factory=uuid4)
-    called_at: datetime = Field(default_factory=datetime.utcnow)
+    called_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     model: str
     input_tokens: int
     output_tokens: int

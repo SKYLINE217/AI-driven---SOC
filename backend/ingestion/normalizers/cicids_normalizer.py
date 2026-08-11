@@ -10,7 +10,7 @@ CSV data for feature engineering downstream.
 """
 
 import math
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from backend.models import (
@@ -144,7 +144,7 @@ def normalize_cicids(row: dict[str, Any]) -> NormalizedEvent:
     })
 
     # Parse timestamp — CICIDS2017 uses various date formats
-    timestamp = datetime.utcnow()
+    timestamp = datetime.now(UTC)
     ts_str = cleaned.get("Timestamp", cleaned.get("Flow ID", ""))
     if ts_str:
         for fmt in [
