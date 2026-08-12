@@ -24,6 +24,13 @@ Endpoints (Day 4):
 
 from __future__ import annotations
 
+import sys
+import os
+
+# Ensure the root project directory is in the python path for Vercel deployment
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+
 import math
 import os
 from contextlib import asynccontextmanager
