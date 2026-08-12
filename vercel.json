@@ -6,7 +6,7 @@
     },
     "backend": {
       "root": "backend",
-      "entrypoint": "api/main.py"
+      "entrypoint": "api.main:app"
     }
   },
   "rewrites": [
