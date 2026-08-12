@@ -63,6 +63,17 @@ test-results/
 *.env.*
 !.env.example
 
+# JWT keys — NEVER commit private keys
+keys/
+*.pem
+jwt_private.pem
+jwt_public.pem
+
+# Security scan reports
+gitleaks-report.json
+bandit-report.json
+pip-audit-report.json
+
 # Misc
 .agents/
 plan/

@@ -26,30 +26,38 @@ from __future__ import annotations
 
 import math
 import os
-import random
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import structlog
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 import backend.api.incident_service as svc
 from backend.api.auth_middleware import get_current_user
-from backend.api.incident_service import seed_mock_data
 from backend.api.routers import alerts, auth, incidents, websocket
+from backend.db.engine import engine
+
+log = structlog.get_logger()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Seed mock data on startup."""
-    seed_mock_data()
+    """Initialise DB engine on startup; dispose cleanly on shutdown."""
+    log.info("startup", msg="SOC Triager API starting — connecting to database")
+    # Verify DB connectivity early so a misconfigured DATABASE_URL fails fast
+    async with engine.connect() as conn:
+        await conn.execute(__import__('sqlalchemy').text("SELECT 1"))
+    log.info("startup", msg="Database connection OK")
     yield
+    await engine.dispose()
+    log.info("shutdown", msg="Database engine disposed")
 
 
 app = FastAPI(
     title="SOC Triager API",
     description="AI-Driven SOC Triager — MITRE ATT&CK Incident Manager",
-    version="0.4.0-day4",
+    version="1.0.0",
     lifespan=lifespan,
 )
 
@@ -71,6 +79,37 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ─── Rate Limiting ────────────────────────────────────────────────────────────
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ─── Security Headers ─────────────────────────────────────────────────────────
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; object-src 'none'; "
+            "style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+        )
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+# ─── Trace ID ─────────────────────────────────────────────────────────────────
+from backend.middleware.trace_id import TraceIdMiddleware
+app.add_middleware(TraceIdMiddleware)
 
 # ─── Routers ─────────────────────────────────────────────────────────────────
 app.include_router(auth.router)

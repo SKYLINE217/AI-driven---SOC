@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import json
 import os
-from jose import jwt, JWTError
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
+
+from backend.api.auth_middleware import decode_token
 
 try:
     import redis.asyncio as aioredis
@@ -17,17 +18,14 @@ except ImportError:
 
 router = APIRouter()
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "dev_secret_change_me")
-JWT_ALGORITHM = "HS256"
-
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 
 def verify_jwt(token: str) -> dict | None:
+    """Verify a JWT token for WebSocket auth. Returns claims or None."""
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload
-    except JWTError:
+        return decode_token(token)
+    except Exception:
         return None
 
 
