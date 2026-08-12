@@ -1,0 +1,108 @@
+groups:
+  - name: soc_pipeline
+    interval: 30s
+    rules:
+      # ── Pipeline lag alert ────────────────────────────────────────────────
+      - alert: PipelineLagHigh
+        expr: soc_pipeline_lag_seconds > 30
+        for: 2m
+        labels:
+          severity: critical
+          team: soc-platform
+        annotations:
+          summary: "SOC pipeline lag exceeds 30 seconds"
+          description: >
+            Events are taking {{ $value | humanizeDuration }} to flow from
+            ingestion to incident creation. Check Faust worker health and
+            Redpanda consumer lag.
+          runbook: "https://wiki.internal/soc/runbooks/pipeline-lag"
+
+      # ── LLM circuit open ──────────────────────────────────────────────────
+      - alert: LLMCircuitOpen
+        expr: soc_llm_circuit_open == 1
+        for: 0m
+        labels:
+          severity: warning
+          team: soc-platform
+        annotations:
+          summary: "LLM circuit breaker is open — triage using heuristics"
+          description: >
+            The Anthropic API circuit breaker has opened after 5 consecutive
+            failures. All new incidents are being triaged with heuristic
+            fallback (confidence = 0.0) until the circuit resets (60s).
+          runbook: "https://wiki.internal/soc/runbooks/llm-circuit"
+
+      # ── Model drift ───────────────────────────────────────────────────────
+      - alert: AnomalyScoreDriftLow
+        expr: >
+          histogram_quantile(0.95,
+            rate(scoring_latency_seconds_bucket[10m])
+          ) < 0.2
+        for: 10m
+        labels:
+          severity: warning
+          team: ml-ops
+        annotations:
+          summary: "Anomaly score p95 is suspiciously low — possible model drift"
+          description: >
+            The 95th percentile anomaly score has been below 0.2 for 10
+            minutes. This may indicate model drift, a data pipeline issue,
+            or that the scoring API is returning defaults.
+
+      # ── ML model fallback ─────────────────────────────────────────────────
+      - alert: ScoringAPIInFallback
+        expr: rate(model_fallback_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: ml-ops
+        annotations:
+          summary: "Scoring API is using heuristic fallback"
+          description: >
+            The ML scoring API has fallen back to heuristic scoring.
+            Check MLflow model registry and MLFLOW_TRACKING_URI configuration.
+
+  - name: soc_security
+    interval: 30s
+    rules:
+      # ── Brute force on SOC platform itself ───────────────────────────────
+      - alert: SOCPlatformBruteForce
+        expr: rate(soc_auth_failures_total[1m]) > 100
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "High authentication failure rate on SOC platform"
+          description: >
+            {{ $value | humanize }} failed auth attempts/minute detected on the
+            SOC platform itself. Possible credential stuffing or brute force
+            against the analyst login endpoint.
+          runbook: "https://wiki.internal/soc/runbooks/soc-brute-force"
+
+      # ── Rate limiting triggered repeatedly ───────────────────────────────
+      - alert: RateLimitHitsElevated
+        expr: rate(soc_rate_limit_hits_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "Elevated rate limit hits — possible API abuse"
+          description: >
+            {{ $value | humanize }} requests/minute are being rate-limited.
+            This may indicate automated probing of the backend API.
+
+      # ── LLM prompt injection detected ────────────────────────────────────
+      - alert: LLMInjectionAttempt
+        expr: rate(soc_llm_calls_total{status="injection_detected"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Prompt injection attempt detected in event data"
+          description: >
+            The LLM triage canary was found in Claude's response, indicating
+            a prompt injection attempt via event data. Investigate the
+            dead-lettered events and the data source.

@@ -67,3 +67,9 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.20
 slowapi==0.1.9
 pybreaker==1.1.0
+
+# === Cloud Connectors ===
+boto3==1.35.0
+azure-eventhub==5.11.7
+azure-eventhub-checkpointstoreblob-aio==1.2.0
+azure-storage-blob==12.23.0

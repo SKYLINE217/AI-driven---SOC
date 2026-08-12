@@ -1,0 +1,184 @@
+---
+# NetworkPolicy: Incident API
+# Allow ingress only from the ingress-nginx namespace.
+# Allow egress only to postgres, redis, and the scoring-api.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: incident-api-netpol
+  namespace: soc-backend
+spec:
+  podSelector:
+    matchLabels:
+      app: incident-api
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Accept traffic from ingress controller only
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+
+  egress:
+    # PostgreSQL
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: soc-data
+          podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+
+    # Redis
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: soc-data
+          podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+
+    # Scoring API (internal)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: scoring-api
+      ports:
+        - protocol: TCP
+          port: 8001
+
+    # DNS resolution
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+
+---
+# NetworkPolicy: Scoring API
+# Accept only from incident-api and faust-worker in soc-backend namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: scoring-api-netpol
+  namespace: soc-backend
+spec:
+  podSelector:
+    matchLabels:
+      app: scoring-api
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: incident-api
+        - podSelector:
+            matchLabels:
+              app: faust-worker
+      ports:
+        - protocol: TCP
+          port: 8001
+
+  egress:
+    # MLflow tracking server
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: soc-mlops
+      ports:
+        - protocol: TCP
+          port: 5000
+    # DNS
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+
+---
+# NetworkPolicy: Faust Worker
+# Egress to Redpanda, Redis, Postgres, and scoring-api only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: faust-worker-netpol
+  namespace: soc-backend
+spec:
+  podSelector:
+    matchLabels:
+      app: faust-worker
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress: []  # Faust worker accepts no ingress (it's a consumer)
+
+  egress:
+    # Redpanda
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: soc-data
+          podSelector:
+            matchLabels:
+              app: redpanda
+      ports:
+        - protocol: TCP
+          port: 9092
+        - protocol: TCP
+          port: 19092
+
+    # Redis
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: soc-data
+          podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+
+    # PostgreSQL
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: soc-data
+          podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+
+    # Scoring API
+    - to:
+        - podSelector:
+            matchLabels:
+              app: scoring-api
+      ports:
+        - protocol: TCP
+          port: 8001
+
+    # DNS
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
