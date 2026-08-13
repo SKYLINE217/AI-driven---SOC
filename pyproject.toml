@@ -1,0 +1,13 @@
+[project]
+name = "soc-triager"
+version = "1.0.0"
+description = "SOC Triager - Pure Python security operations automation CLI"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

@@ -22,7 +22,19 @@ mlflow.db
 data/cicids2017/*.csv
 data/elastic_samples/*.json
 data/elastic_samples/
-data/mitre/*.json
+# Keep the MITRE ATT&CK STIX corpus tracked so the CLI runs out-of-the-box
+!data/mitre/*.json
+#
+# Pure-Python CLI runtime outputs (regenerate locally)
+data/soc_triager.db
+data/soc_triager.db-journal
+data/synthetic/
+data/models/
+output/
+docs/EVAL_RESULTS.md
+#
+# Runtime scratch
+_audit_snapshot.py
 
 # Dependencies
 node_modules/

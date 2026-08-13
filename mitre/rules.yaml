@@ -1,0 +1,97 @@
+rules:
+  # Credential Access
+  - id: rule_brute_force_ssh
+    technique_id: T1110.001
+    name: "Brute Force: Password Guessing (SSH)"
+    tactic: Credential Access
+    condition: "event_type == 'auth' and action == 'failed' and dest_port == 22 and event_count_5m > 10"
+  
+  - id: rule_brute_force_rdp
+    technique_id: T1110.001
+    name: "Brute Force: Password Guessing (RDP)"
+    tactic: Credential Access
+    condition: "event_type == 'auth' and action == 'failed' and dest_port == 3389 and event_count_5m > 10"
+    
+  - id: rule_brute_force_http
+    technique_id: T1110.001
+    name: "Brute Force: Password Guessing (HTTP)"
+    tactic: Credential Access
+    condition: "event_type == 'auth' and action == 'failed' and dest_port in [80, 443] and event_count_5m > 20"
+
+  # Discovery
+  - id: rule_port_scan
+    technique_id: T1046
+    name: "Network Service Discovery"
+    tactic: Discovery
+    condition: "distinct_dest_ports > 50 and dest_ip_fanout < 5"
+
+  - id: rule_network_scan
+    technique_id: T1046
+    name: "Network Service Discovery (Horizontal)"
+    tactic: Discovery
+    condition: "dest_ip_fanout > 50 and distinct_dest_ports < 5"
+
+  # Impact
+  - id: rule_ddos
+    technique_id: T1498
+    name: "Network Denial of Service"
+    tactic: Impact
+    condition: "event_count_1m > 1000 and bytes_transferred > 100000000"
+
+  # Lateral Movement
+  - id: rule_lateral_smb
+    technique_id: T1021.002
+    name: "Remote Services: SMB/Windows Admin Shares"
+    tactic: Lateral Movement
+    condition: "event_type == 'network' and dest_port in [139, 445] and source_is_internal and dest_is_internal and anomaly_score > 0.8"
+
+  - id: rule_lateral_rdp
+    technique_id: T1021.001
+    name: "Remote Services: Remote Desktop Protocol"
+    tactic: Lateral Movement
+    condition: "event_type == 'network' and dest_port == 3389 and source_is_internal and dest_is_internal and anomaly_score > 0.8"
+
+  - id: rule_lateral_ssh
+    technique_id: T1021.004
+    name: "Remote Services: SSH"
+    tactic: Lateral Movement
+    condition: "event_type == 'network' and dest_port == 22 and source_is_internal and dest_is_internal and anomaly_score > 0.8"
+
+  # Privilege Escalation / Initial Access
+  - id: rule_impossible_travel
+    technique_id: T1078
+    name: "Valid Accounts (Impossible Travel)"
+    tactic: Initial Access
+    condition: "geo_velocity_kmh > 1000 and event_type == 'auth' and action == 'success'"
+
+  - id: rule_privesc_sudo
+    technique_id: T1548.003
+    name: "Abuse Elevation Control Mechanism: Sudo and Sudo Caching"
+    tactic: Privilege Escalation
+    condition: "event_type == 'process' and 'sudo' in command_line and user != 'root' and anomaly_score > 0.8"
+
+  - id: rule_privesc_setuid
+    technique_id: T1548.001
+    name: "Abuse Elevation Control Mechanism: Setuid and Setgid"
+    tactic: Privilege Escalation
+    condition: "event_type == 'process' and 'chmod u+s' in command_line"
+
+  # Exfiltration
+  - id: rule_data_exfil
+    technique_id: T1041
+    name: "Exfiltration Over C2 Channel"
+    tactic: Exfiltration
+    condition: "bytes_transferred > 500000000 and dest_is_external and anomaly_score > 0.8"
+
+  # Defense Evasion / Execution
+  - id: rule_process_injection
+    technique_id: T1055
+    name: "Process Injection"
+    tactic: Defense Evasion
+    condition: "event_type == 'process' and ('CreateRemoteThread' in api_call or 'WriteProcessMemory' in api_call)"
+
+  - id: rule_suspicious_lineage
+    technique_id: T1059
+    name: "Command and Scripting Interpreter"
+    tactic: Execution
+    condition: "event_type == 'process' and parent_process in ['winword.exe', 'excel.exe', 'iexplore.exe'] and process in ['cmd.exe', 'powershell.exe']"

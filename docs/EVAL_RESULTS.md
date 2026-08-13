@@ -1,6 +1,6 @@
 # SOC Triager — Evaluation Results
 
-**Generated:** 2026-08-11T07:33:29Z  
+**Generated:** 2026-08-13T18:10:52Z  
 **Dataset:** CICIDS2017 (Wednesday BENIGN + Friday DDoS/PortScan)  
 **Model:** Isolation Forest (0.6×) + Autoencoder (0.4×) ensemble  
 **Threshold:** 0.4  
