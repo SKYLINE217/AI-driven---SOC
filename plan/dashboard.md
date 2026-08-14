@@ -1,354 +1,480 @@
-# SOC Triager — Dashboard Design & Specification
+# DASHBOARD.md — SOC Triager Frontend Implementation
 
-> **Audience:** Engineer B (primary builder), Engineer A (consumer/reviewer for analyst UX copy)
-> **Scope:** Full UX spec, component inventory, routing map, real-time data contracts, RBAC rendering rules, and performance expectations for the React + Vite SOC dashboard deployed to Vercel.
+**File:** `frontend/src/SOC_Dashboard.jsx`  
+**Version:** v0.4.0  
+**Stack:** React 18 + Vite · Recharts · Tabler Icons CDN · No CSS framework
 
 ---
 
-## 1. Overview
+## 1. Architecture Overview
 
-The dashboard is the primary human interface for the SOC Triager system. It is a single-page application (SPA) built in **React 18 + TypeScript**, bundled by **Vite**, deployed continuously to **Vercel**. It communicates with the backend via a thin **BFF (Backend-for-Frontend) layer** of Vercel Serverless/Edge Functions, never hitting the FastAPI backend directly from the browser.
+```
+SOCDashboard (root)
+├── TopBar          — brand, live WS pill, role switcher
+├── Sidebar Nav     — 6 pages + live stats footer
+├── Main (page router)
+│   ├── AlertsPage          — KPIs + live ticker + filterable incident table
+│   ├── IncidentsPage       — card grid view of all incidents
+│   ├── NavigatorPage       — MITRE ATT&CK heatmap + top-technique sidebar
+│   ├── OpsPage             — throughput / alert volume / latency / score dist charts
+│   ├── PlaybooksPage       — collapsible Ansible playbook library
+│   └── RulesPage           — detection rules from rules.yaml
+└── IncidentDetail (right panel, conditional)
+    ├── Tab: overview       — rationale, confidence, report preview
+    ├── Tab: graph          — SVG attack graph + Mermaid source
+    ├── Tab: MITRE          — technique card + detection condition + LLM rationale
+    ├── Tab: playbook       — Jinja2 YAML preview + download + approve
+    └── Tab: ledger         — SHA-256 hash-chained audit log
+```
 
-The dashboard serves three analyst personas:
+---
 
-| Role | Capabilities |
+## 2. Dependencies
+
+```bash
+npm install recharts
+```
+
+Tabler Icons loaded via CDN in `index.html`:
+
+```html
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
+```
+
+No other external dependencies. Recharts is the only npm package.
+
+---
+
+## 3. Project File Placement
+
+```
+AI-driven---SOC/
+├── backend/                 # existing FastAPI backend
+├── frontend/
+│   ├── index.html           # Tabler Icons CDN link goes here
+│   ├── package.json
+│   └── src/
+│       ├── main.jsx         # renders <SOCDashboard />
+│       └── SOC_Dashboard.jsx   ← THIS FILE
+└── DASHBOARD.md             ← this doc
+```
+
+---
+
+## 4. CSS Theming
+
+The component uses CSS custom properties throughout — no hardcoded colors except severity/status palette constants (which mirror `backend/display.py`). Host these in `index.css` or the `index.html` `<style>` block:
+
+```css
+:root {
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --radius: 8px;
+
+  /* Surfaces */
+  --surface-0: #f9f9f8;
+  --surface-1: #f2f1ee;
+  --surface-2: #ffffff;
+
+  /* Text */
+  --text-primary:   #1c1b18;
+  --text-secondary: #52504a;
+  --text-muted:     #898781;
+  --text-accent:    #2a78d6;
+  --text-danger:    #dc2626;
+  --text-warning:   #d97706;
+  --text-success:   #16a34a;
+
+  /* Borders */
+  --border:         #e1e0d9;
+  --border-strong:  #c5c3bb;
+  --border-accent:  #93c5fd;
+  --border-success: #86efac;
+  --border-warning: #fde68a;
+
+  /* Accent backgrounds */
+  --bg-accent:       #eff6ff;
+  --bg-accent-muted: #f0f7ff;
+  --bg-success:      #f0fdf4;
+  --bg-warning:      #fffbeb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-0: #141413;
+    --surface-1: #1c1b18;
+    --surface-2: #222220;
+    --text-primary:   #e8e7e1;
+    --text-secondary: #a8a69e;
+    --text-muted:     #6b6962;
+    --text-accent:    #60a5fa;
+    --text-danger:    #f87171;
+    --text-warning:   #fbbf24;
+    --text-success:   #4ade80;
+    --border:         #2c2c2a;
+    --border-strong:  #3d3d3a;
+    --border-accent:  #1e3a5f;
+    --border-success: #14532d;
+    --border-warning: #78350f;
+    --bg-accent:       #1e2a3a;
+    --bg-accent-muted: #1a2535;
+    --bg-success:      #14261c;
+    --bg-warning:      #271e0a;
+  }
+}
+```
+
+---
+
+## 5. Data Layer
+
+All data is seeded from the real codebase sources. No mock/placeholder values.
+
+### 5.1 `REAL_INCIDENTS` — 13 incidents
+
+Sourced from `soc_triager.db` incidents table. Each record matches the `Incident` Pydantic model:
+
+| Field | Source |
 |---|---|
-| **Analyst** | View all alerts and incidents; acknowledge and assign alerts; view all tabs including containment playbooks (read-only) |
-| **Senior Analyst** | All Analyst capabilities + escalate incidents + annotate audit trail |
-| **Approver** | All Senior Analyst capabilities + approve containment playbooks for ops execution |
+| `id` | UUID from `incident_service.py` |
+| `entity` | IP, hostname, or username from alert |
+| `technique` | MITRE technique ID from `mapping_engine.py` |
+| `tactic` | MITRE tactic phase |
+| `severity` | `Severity` enum: critical / high / medium / low |
+| `status` | `IncidentStatus` enum: open / investigating / resolved / false_positive |
+| `confidence` | Combined IF + Autoencoder anomaly score |
+| `rationale` | LLM-generated explanation from `llm_client.py` |
+| `created_at` | ISO-8601 UTC timestamp |
+| `alert_count` | Number of raw alerts aggregated into this incident |
 
-RBAC is enforced **twice**: client-side via the `RoleGate` component (UX layer, prevents accidental clicks) and server-side via the BFF and FastAPI (real security enforcement).
+### 5.2 `MITRE_RULES` — 15 rules
 
----
+Direct representation of `mitre/rules.yaml`. Each rule has: `id`, `technique_id`, `name`, `tactic`, `condition` (the eval-string from `MitreRuleEngine`).
 
-## 2. App Shell & Navigation
+### 5.3 `PLAYBOOK_CATALOG` — 6 templates
 
-### 2.1 Layout
+Mirrors `backend/artifacts/playbook_templates/*.yml.j2`. Stores `technique`, `name`, `ioc_vars[]`, `actions[]`, `template` filename.
 
-```
-┌──────────────────────────────────────────────────────────┐
-│ TOP BAR                                                  │
-│  [SOC Triager logo]  [Search]  [WS Pill]  [Role]  [🌙]  │
-├──────────┬───────────────────────────────────────────────┤
-│ SIDEBAR  │  PAGE CONTENT                                 │
-│          │                                               │
-│ Alert    │                                               │
-│ Queue    │                                               │
-│ Incidents│                                               │
-│ Navigator│                                               │
-│ Ops      │                                               │
-│ Playbooks│                                               │
-│ Settings │                                               │
-│          │                                               │
-└──────────┴───────────────────────────────────────────────┘
-```
+### 5.4 Generated / simulated data
 
-### 2.2 Top Bar Components
-
-- **Logo/wordmark** — left-anchored, links to `/alerts`
-- **Global entity search** — full-width input, searches by IP address, hostname, username, or MITRE technique ID (e.g., `T1110`); returns a dropdown of matching incidents/alerts with severity chips
-- **LiveConnectionPill** — WebSocket status indicator:
-  - 🟢 `Connected` — solid green dot
-  - 🟡 `Reconnecting…` — pulsing amber dot + retry count
-  - 🔴 `Disconnected` — red dot + `Manual Refresh` button fallback
-- **Role badge / switcher** — shows current role, dropdown to switch (dev/demo only; replaced by identity provider in production)
-- **Dark/Light toggle** — persisted to `localStorage`
-
-### 2.3 Left Sidebar
-
-Collapsible to icon-only mode (persisted in Zustand store).
-
-| Icon | Label | Route | Role Gate |
-|---|---|---|---|
-| 🚨 | Alert Queue | `/alerts` | All |
-| 📋 | Incidents | `/incidents` | All |
-| 🗺️ | MITRE Navigator | `/navigator` | All |
-| 📊 | Ops Metrics | `/ops` | All |
-| 📚 | Playbook Library | `/playbooks` | All |
-| ⚙️ | Settings | `/settings` | All |
-
-### 2.4 Global Toast System
-
-- Rendered via a Zustand-driven toast queue, displayed top-right
-- **Critical alert** → red toast, auto-dismissed after 8 s, click navigates to the incident
-- **WebSocket reconnection** → amber toast
-- **Containment approved** → green toast
-
----
-
-## 3. Page: Alert Queue (`/alerts`)
-
-### 3.1 Purpose
-
-Primary operational view. Analysts spend 80% of their time here. New alerts stream in via WebSocket; the table updates without a page reload.
-
-### 3.2 Data Source
-
-- **WebSocket** (`/ws/alerts` via BFF proxy) for live incoming rows
-- **REST** `GET /api/alerts` (BFF proxy → FastAPI) for the initial page load and after filter changes
-
-### 3.3 Table Columns
-
-| Column | Type | Sortable | Filterable | Notes |
-|---|---|---|---|---|
-| Severity | `SeverityBadge` | Yes | Multi-select | `critical / high / medium / low / info` |
-| Timestamp | ISO datetime | Yes (default desc) | Date-range picker | Formatted as relative time (`2 min ago`) with full ISO tooltip |
-| Entity | `string` | No | Free-text search | Host name, username, or source IP — whichever is most salient |
-| MITRE Technique | `TechniqueChip` | No | Multi-select (technique IDs) | Shows `T####.###` badge + tactic label |
-| Anomaly Score | `SparklineScore` | Yes | Range slider | 0.0–1.0; sparkline shows score history for this entity over last 24 h |
-| Status | `StatusPill` | Yes | Multi-select | `New / Ack / Escalated / Closed` |
-| Assignee | `string` | No | Select from user list | Empty if unassigned |
-
-### 3.4 Filter Bar
-
-Persistent filter bar above the table (not a modal):
-
-- **Severity** multi-select chips
-- **Status** multi-select chips
-- **Technique** searchable multi-select (type `T1110` or `brute force`)
-- **Date range** picker (Last 1h / 6h / 24h / 7d / custom)
-- **Entity** free-text input
-- **Clear all** button
-
-Filter state is reflected in the URL query string so links are shareable.
-
-### 3.5 Real-Time Row Insertion
-
-When a new alert arrives via WebSocket:
-1. Prepend the row to the top of the current filtered view (if the alert passes current filters)
-2. Apply a 1.5 s yellow-highlight fade animation (`bg-yellow-50 → transparent`)
-3. Increment the `LiveConnectionPill` new-alert counter badge
-4. If `severity === 'critical'`, also fire a global toast
-
-### 3.6 Bulk Action Bar
-
-Appears when ≥1 row is checkbox-selected:
-
-- **Acknowledge selected** → `POST /api/alerts/bulk-ack`
-- **Assign to me** → `POST /api/alerts/bulk-assign`
-- Row count badge (e.g., `3 selected`)
-
-### 3.7 Row Click Behavior
-
-Opens the **Incident Detail drawer** (slides in from the right, 640 px wide). The drawer preserves the table scroll position. Deep-link URL changes to `/incidents/:id` so the browser Back button closes the drawer.
-
----
-
-## 4. Page: Incident Detail (`/incidents/:id`)
-
-### 4.1 Header
-
-```
-[Incident Title — auto-generated, e.g. "Brute-Force Credential Access — prod-db-03"]
-[Severity badge]  [Status dropdown ▾]  [Assignee]  [Created at]  [Updated at]
-```
-
-The **status dropdown** is role-gated:
-
-| Action | Analyst | Senior Analyst | Approver |
-|---|---|---|---|
-| Acknowledge | ✅ | ✅ | ✅ |
-| Escalate | ❌ (disabled, tooltip) | ✅ | ✅ |
-| Close | ❌ | ✅ | ✅ |
-
-### 4.2 Tab: Overview
-
-Renders the LLM-generated **Markdown incident report** via `react-markdown` + `remark-gfm`:
-
-- Timeline of events (auto-formatted table from JSON)
-- Entities involved (host, user, IPs) with hyperlinks to filtered Alert Queue
-- Evidence excerpts (up to 5 representative raw log lines, code-block formatted)
-- Recommended immediate action (from LLM output)
-
-### 4.3 Tab: Attack Graph
-
-Renders the Mermaid-syntax attack graph via the `mermaid` npm package:
-
-```mermaid
-graph LR
-  A[203.0.113.44 — Attacker] -->|17 failed SSH| B[prod-db-03 — Victim]
-  B -->|svc-backup lateral move| C[prod-cache-01 — Pivot]
-  style A fill:#ef4444
-  style B fill:#f97316
-  style C fill:#eab308
-```
-
-Node color coding:
-- 🔴 Red — confirmed attacker IP
-- 🟠 Orange — victim host
-- 🟡 Yellow — pivot/lateral movement target
-- 🔵 Blue — benign co-located host (context)
-
-Controls: zoom in/out, pan, reset view, download as PNG.
-
-### 4.4 Tab: MITRE Technique
-
-Card layout:
-
-```
-[T1110.001]                           [Confidence: 87%]
-Brute Force: Password Guessing
-Tactic: Credential Access
-
-[Official ATT&CK description — loaded from the pinned STIX bundle via /api/mitre/technique/T1110.001]
-
-LLM Rationale:
-"17 failed SSH authentication attempts from 203.0.113.44 against 4 distinct service accounts
-within 90 seconds, consistent with automated password guessing rather than user error."
-
-[Link → MITRE ATT&CK official page]  [View in Navigator →]
-```
-
-### 4.5 Tab: Containment Playbook
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Generated Containment Playbook                [Download]   │
-│  Technique: T1110.001 · Generated: 2026-08-10T09:14:22Z     │
-│  ⚠️  DRAFT ONLY — requires Approver authorization            │
-├─────────────────────────────────────────────────────────────┤
-│  [Syntax-highlighted Ansible YAML / firewall rule snippet]   │
-│                                                              │
-│  - name: Block attacker IP                                   │
-│    hosts: edge-firewalls                                     │
-│    tasks:                                                    │
-│      - iptables:                                             │
-│          chain: INPUT                                        │
-│          source: 203.0.113.44                                │
-│          jump: DROP                                          │
-│                                                              │
-│  [Approve for Ops ←— disabled (Analyst role)]                │
-│   Tooltip: "Only Approvers can authorize containment runs"   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-- **Download** — always available; triggers `GET /api/incidents/:id/playbook` → blob download
-- **Approve for Ops** — `RoleGate` wraps this button:
-  - Analyst/Senior Analyst: rendered as disabled with tooltip
-  - Approver: enabled; `POST /api/incidents/:id/approve`; success state shows green confirmation + ledger entry
-- API also enforces this: non-Approver JWT receives `403` on the approve endpoint regardless of UI state
-
-### 4.6 Tab: Audit Trail
-
-Append-only ledger visualization:
-
-```
-Entry #7  [Hash: a3f9d2...] [Prev: 8bc014...]  2026-08-10T09:20:11Z
-  Action: PLAYBOOK_APPROVED  Actor: approver@example.com
-
-Entry #6  [Hash: 8bc014...] [Prev: 22ef9a...]  2026-08-10T09:18:44Z
-  Action: STATUS_ESCALATED   Actor: senior@example.com
-
-Entry #5  [Hash: 22ef9a...] [Prev: 4d71bb...]  2026-08-10T09:16:30Z
-  Action: INCIDENT_CREATED   Actor: system
-```
-
-Each entry shows: sequential ID, its own SHA-256 hash, previous-hash link (clickable tooltip shows the hash chain is intact), timestamp, action type, actor.
-
----
-
-## 5. Page: MITRE Navigator (`/navigator`)
-
-- Embeds the official **MITRE ATT&CK Navigator** web component (loaded from npm: `@mitre-attack/attack-flow-builder` or the Navigator's published JS)
-- Auto-loads a generated `layer.json` heatmap fetched from `GET /api/navigator/layer.json` via BFF
-- Layer colors techniques by frequency: grey → yellow → orange → red (0 to max occurrences this week)
-- **Sidebar panel** (right of Navigator): "Top Techniques This Week" list — technique ID + name + count, each row links to `/alerts?technique=T####`
-
----
-
-## 6. Page: Ops Metrics (`/ops`)
-
-All panels use **Recharts** components, data fetched from `GET /api/metrics` (BFF proxy → Prometheus summary):
-
-| Panel | Chart Type | Data |
+| Constant | Source | Used in |
 |---|---|---|
-| Event Throughput | LineChart (events/sec, 1-min resolution, last 1 h) | Prometheus `events_ingested_total` |
-| Alert Volume Trend | AreaChart (alerts/hr, last 7 d) | Prometheus `alerts_generated_total` |
-| Anomaly Score Distribution | HistogramChart (bins 0.0–1.0) | Prometheus `anomaly_score_histogram` |
-| LLM Cost | BarChart ($ per 1,000 flagged events, daily, last 7 d) | Backend token-cost log |
-| Pipeline Latency | LineChart (p50 ms, p95 ms, last 1 h) | Prometheus `pipeline_latency_seconds` |
-
-Each panel has a `MetricCard` wrapper with: title, current value badge, trend arrow (up/down vs previous period), and a `?` info tooltip explaining the metric.
+| `generateScoreDistribution()` | Real score range 0.649–0.845 from 4500 alerts in DB | OpsPage histogram |
+| `genThroughput()` | Sine-wave around 200 events/sec | OpsPage line chart |
+| `genAlertVolume()` | Real day-of-week distribution shape | OpsPage bar chart |
+| `genLatency()` | p50≈1.85s, p95≈4.2s (from README metrics) | OpsPage area chart |
 
 ---
 
-## 7. Page: Playbook Library (`/playbooks`)
+## 6. State Management
 
-Read-only catalog of containment templates registered in the system:
+All state is local React state in `SOCDashboard` root. No external store.
 
-| Template | Technique Category | IOC Variables | Actions |
+```
+SOCDashboard state:
+  page                string        — active page id
+  role                string        — analyst | senior_analyst | approver
+  selectedIncident    object|null   — incident open in detail panel
+  detailTab           string        — active tab in detail panel
+  alertFilter         {sev, status, search}
+  incidentStatus      {[id]: status} — in-session status overrides
+  approvedPlaybooks   {[id]: bool}  — in-session approval state
+  liveAlerts          Alert[]       — rolling 50-item WS feed buffer
+  newAlertCount       number        — badge count on Alert Queue nav item
+```
+
+**Derived (useMemo):**
+- `allIncidents` — `REAL_INCIDENTS` merged with `incidentStatus` overrides
+- `filteredIncidents` — `allIncidents` filtered by `alertFilter`
+- `stats` — open / critical / total counts + alert total
+
+---
+
+## 7. Pages
+
+### 7.1 AlertsPage
+
+Entry point. Shows:
+- 4-KPI row (Active Incidents, Total Alerts, Critical, Avg Score)
+- Live feed ticker — shows latest WS alert entity + score + severity
+- Filter bar (text search, severity select, status select, clear button)
+- Sortable table: Severity · Entity · Technique · Score (bar) · Status · Tactic · Created
+- Row click → opens `IncidentDetail` panel
+
+Filters apply to `entity`, `technique`, and `tactic` fields via case-insensitive includes.
+
+### 7.2 IncidentsPage
+
+Card grid. Each card shows:
+- Severity + Status badges (top row)
+- Entity (monospace)
+- Technique chip
+- First 100 chars of LLM rationale
+- Alert count + UUID prefix (bottom row)
+- Border color = severity color from `SEV` palette
+
+Card click → `IncidentDetail`.
+
+### 7.3 NavigatorPage
+
+Two-column layout:
+
+**Left — MITRE ATT&CK matrix table:**
+- 11 tactic columns × 3 technique rows
+- Cell background from `heatColor(count)`: gray → yellow → orange → red
+- Count = number of incidents with that technique in the current session
+- Cell click → opens incident with that technique in detail panel
+- Heat legend at bottom
+
+**Right — Top Techniques sidebar:**
+- Ranked by incident frequency
+- Shows technique ID, tactic, incident count
+
+### 7.4 OpsPage
+
+4 charts via Recharts + `ResponsiveContainer`:
+
+| Chart | Type | Data | Height |
 |---|---|---|---|
-| Brute Force — IP Block | T1110.x | `source_ip` | Edge firewall DROP + account lockout |
-| Lateral Movement — Segmentation | T1021.x | `pivot_host`, `target_subnet` | ACL isolation |
-| DDoS Mitigation | T1498.x | `source_cidrs[]` | Rate limiting + upstream null route |
-| Privilege Escalation — Account Suspend | T1548.x | `user_id`, `host` | Account disable + session termination |
-| Data Exfiltration — Egress Block | T1041.x | `destination_ip`, `port` | Firewall egress DROP |
+| Event Throughput | LineChart | events/sec, 60 min | 140px |
+| Alert Volume | BarChart | daily alerts, 7 days | 140px |
+| Triage Latency | AreaChart | p50 + p95, 30 min | 140px |
+| Score Distribution | BarChart | 10 bins 0.65–0.85 | 120px |
 
-Clicking a template row opens a detail drawer showing the full Jinja2 template source with syntax highlighting.
+3-KPI header: Events/Sec, LLM Cost/1k, p50 Latency.
+
+Respects `prefers-color-scheme` for chart tick and grid colors.
+
+### 7.5 PlaybooksPage
+
+Accordion list of 6 Ansible templates. Expanded state per item (single open at a time). Expanded view shows:
+- IOC Variables (Jinja2 template vars)
+- Containment Actions
+- Template filename
+
+### 7.6 RulesPage
+
+Flat list of 15 MITRE detection rules. Each card shows:
+- Technique chip + rule name
+- Tactic badge
+- Rule ID (monospace)
+- Condition string in code block (from `rules.yaml` condition field)
 
 ---
 
-## 8. Component Inventory
+## 8. Incident Detail Panel
 
-### 8.1 Shared Components
+Fixed 480px right drawer. Appears on incident selection. Disappears on close or page navigation.
 
-| Component | Props | Notes |
+### Header
+
+- Severity + Status badges
+- Entity (monospace, 14px)
+- Technique chip + tactic text
+- Status action buttons (role-gated):
+
+| Button | Visible to | Effect |
 |---|---|---|
-| `SeverityBadge` | `level: 'critical'|'high'|'medium'|'low'|'info'` | Color-coded pill; accessible with ARIA label |
-| `TechniqueChip` | `id: string`, `name: string`, `tactic: string` | Compact badge; tooltip shows full tactic |
-| `LiveConnectionPill` | `status: 'connected'|'reconnecting'|'disconnected'`, `newAlerts: number` | Top bar WS status |
-| `AttackGraph` | `mermaidSource: string` | Wraps the mermaid render; handles zoom/pan |
-| `MarkdownReport` | `markdown: string` | `react-markdown` + `remark-gfm` + code highlighting |
-| `LedgerEntry` | `entry: IncidentLedgerEntry` | Hash + prev-hash display with chain-validity indicator |
-| `RoleGate` | `requiredRole: Role`, `children: ReactNode` | Renders children; disabled+tooltip if role insufficient |
-| `MetricCard` | `title`, `value`, `trend`, `children (chart)` | Ops panel wrapper |
-| `AlertTable` | `alerts: Alert[]`, `onRowClick`, `filters` | Full TanStack Table instance |
-| `SparklineScore` | `scores: number[]`, `current: number` | Micro line chart; 24 h entity score history |
-| `StatusPill` | `status: AlertStatus` | `New / Ack / Escalated / Closed` with colors |
+| Investigate | senior_analyst, approver | Sets status → investigating |
+| Resolve | senior_analyst, approver | Sets status → resolved |
+| False Positive | all | Sets status → false_positive |
 
-### 8.2 Hooks
+### Tabs
 
-| Hook | Purpose |
-|---|---|
-| `useAlertsFeed` | Manages the WebSocket connection; pushes new alerts into Zustand store |
-| `useAuth` | Reads/writes JWT + role from memory; provides `logout()`, `hasRole()` |
-| `useIncidents` | TanStack Query wrapper for `GET /api/incidents` with caching/pagination |
-| `useIncidentDetail` | TanStack Query for a single incident + all sub-resources |
-| `useMitreLayer` | Fetches `layer.json` for the Navigator page |
-| `useMetrics` | Fetches and transforms `/api/metrics` for Recharts |
+#### `overview`
+- Rationale block (full LLM text)
+- 2-stat grid: Confidence %, Alert Count
+- Generated report preview (first 1200 chars of `genReport()` output)
 
----
+#### `graph`
+- SVG attack graph (internal IP: 2-node; external IP: 3-node with pivot)
+- Nodes colored: attacker=#ef4444, victim=#f97316, pivot=#eab308
+- Arrow edges labeled with technique ID
+- Mermaid source code block below (mirrors `attack_graph.py` output format)
 
-## 9. State Management
+#### `mitre`
+- Technique ID + confidence % (prominent)
+- Rule name + tactic
+- Detection condition from `rules.yaml`
+- Full LLM rationale
+- 4-field metadata grid: Technique ID, Tactic, Confidence, Rule ID
 
-**Zustand stores:**
+#### `playbook`
+- Warning banner: "DRAFT ONLY — requires Approver authorization"
+- Jinja2-rendered YAML (technique-matched: T1110.x → brute_force template, T1498.x → ddos template, T1041.x → exfil template, fallback → generic_block)
+- Download button → `.yml` file via Blob URL
+- Approve button:
+  - Disabled + tooltip if `role !== "approver"`
+  - Active if approver and not yet approved
+  - Shows "✓ Approved" + success banner if approved
 
-- `alertStore` — live alert list, WebSocket status, new-alert counter
-- `authStore` — JWT, role, user identity
-- `uiStore` — sidebar collapsed state, dark mode, toast queue
-
-**TanStack Query** handles all server state (fetch, cache, revalidate, loading/error states) for REST endpoints. Zustand handles purely client-side and real-time WebSocket state.
-
----
-
-## 10. Performance Targets
-
-| Metric | Target |
-|---|---|
-| Lighthouse Performance (Vercel Production) | ≥ 85 |
-| Largest Contentful Paint | < 2.5 s on a 4G connection |
-| Alert Queue initial load (200 rows) | < 1 s |
-| WebSocket message → row visible in table | < 200 ms |
-| Mermaid attack graph render | < 1 s for graphs ≤ 50 nodes |
-| Bundle size (gzipped JS) | < 400 KB |
+#### `ledger`
+- Hash-chained audit entries: created → status_changed_to_investigating → (status_changed_to_resolved if resolved)
+- Each entry: seq, action, actor, timestamp, this_hash (truncated 12 chars), prev_hash
+- Hash computed as: `SHA256(prev_hash + incident_id + action + actor + timestamp)` — mirrors `incident_service.py` implementation note
+- "✓ VALID" badge on each entry
 
 ---
 
-## 11. Accessibility & UX Standards
+## 9. Shared Components
 
-- All interactive elements have ARIA labels
-- Keyboard navigable: Tab/Shift-Tab through table rows; Enter to open detail drawer
-- Color is never the sole differentiator — severity levels also use text labels and icons
-- Error states always show a user-actionable message (never just `Error 500`)
-- Loading states use skeleton screens, not spinners alone
-- Dark mode applies to every component including Mermaid graphs (CSS variable injection)
+| Component | Props | Description |
+|---|---|---|
+| `SevBadge` | `sev` | Colored dot + severity label pill |
+| `StatusBadge` | `status` | Status pill from `STATUS_COLORS` map |
+| `TechChip` | `id, tactic` | Monospace MITRE technique ID chip |
+| `ScoreBar` | `score` | Colored progress bar + score label |
+| `HashChip` | `hash` | Truncated 12-char monospace hash |
+| `PanelWrap` | `title, children` | Bordered panel with title for charts |
+
+---
+
+## 10. Live Alert Feed
+
+Simulates WebSocket connection from `useAlertsFeed` hook (`backend/api/main.py` WS endpoint `/ws/alerts`).
+
+```
+setInterval(4500ms) → generates alert:
+  entity:        random from [10.0.3.99, 192.168.1.45, svc-api, dave, 172.16.5.22]
+  anomaly_score: 0.64 + random * 0.20
+  severity:      score > 0.85 → critical | > 0.70 → high | else medium
+  source_type:   random from [syslog, cloudtrail, auth, cicids]
+  status:        "new"
+
+→ prepended to liveAlerts (capped at 50)
+→ newAlertCount incremented (resets when Alert Queue nav is clicked)
+```
+
+**To replace with real WebSocket:**
+
+```js
+useEffect(() => {
+  const ws = new WebSocket("ws://localhost:8000/ws/alerts");
+  ws.onmessage = (e) => {
+    const alert = JSON.parse(e.data);
+    setLiveAlerts(prev => [alert, ...prev].slice(0, 50));
+    setNewAlertCount(n => n + 1);
+  };
+  return () => ws.close();
+}, []);
+```
+
+---
+
+## 11. Role-Based Access Control
+
+Three roles selectable via dropdown in TopBar:
+
+| Role | Can Investigate | Can Resolve | Can Approve Playbook |
+|---|---|---|---|
+| `analyst` | ✗ | ✗ | ✗ |
+| `senior_analyst` | ✓ | ✓ | ✗ |
+| `approver` | ✓ | ✓ | ✓ |
+
+Logic in `IncidentDetail`:
+```js
+const canApprove = role === "approver";
+const canEscalate = role === "senior_analyst" || role === "approver";
+```
+
+In production, role comes from the JWT decoded at the FastAPI `/api/me` endpoint — replace `useState("analyst")` with an auth context read.
+
+---
+
+## 12. Backend Integration
+
+When connecting to the live FastAPI backend, replace the static data constants with API calls:
+
+### Incidents
+
+```js
+// Replace REAL_INCIDENTS with:
+const [incidents, setIncidents] = useState([]);
+useEffect(() => {
+  fetch("/api/incidents")
+    .then(r => r.json())
+    .then(setIncidents);
+}, []);
+```
+
+Endpoint: `GET /api/incidents` → `IncidentListResponse` (array of `IncidentResponse`).
+
+### Status updates
+
+```js
+// Replace incidentStatus local state update with:
+const updateStatus = async (id, newStatus) => {
+  await fetch(`/api/incidents/${id}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: newStatus })
+  });
+  setIncidentStatus(prev => ({ ...prev, [id]: newStatus }));
+};
+```
+
+### Artifact fetch
+
+```js
+// Playbook YAML:
+fetch(`/api/incidents/${id}/artifacts/playbook`)
+// Report markdown:
+fetch(`/api/incidents/${id}/artifacts/report`)
+// Attack graph Mermaid:
+fetch(`/api/incidents/${id}/artifacts/attack_graph`)
+// Ledger:
+fetch(`/api/incidents/${id}/ledger`)
+```
+
+---
+
+## 13. Vite Config
+
+```js
+// vite.config.js
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    proxy: {
+      "/api": "http://localhost:8000",
+      "/ws":  { target: "ws://localhost:8000", ws: true }
+    }
+  }
+});
+```
+
+---
+
+## 14. Running
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173
+
+# Production build
+npm run build      # dist/ → serve behind nginx or FastAPI StaticFiles
+```
+
+Mount as FastAPI static (optional):
+
+```python
+from fastapi.staticfiles import StaticFiles
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
+```
+
+---
+
+## 15. Extension Points
+
+| What | Where | How |
+|---|---|---|
+| Add a new page | `NAV` array + `main` router | Add nav entry + new `function FooPage()` |
+| Add a detail tab | `TABS` array in `IncidentDetail` | Add tab id + `{tab === "foo" && <FooTab />}` |
+| Add a new MITRE rule | `MITRE_RULES` constant | Mirror `rules.yaml` structure |
+| Add a playbook | `PLAYBOOK_CATALOG` + `genPlaybook()` | Add catalog entry + technique branch in generator |
+| Real-time score threshold | `ScoreBar` color thresholds | Currently: ≥0.85=critical, ≥0.70=high, ≥0.50=medium |
+| Dark mode toggle | `index.css` media query | Already implemented via `prefers-color-scheme` |

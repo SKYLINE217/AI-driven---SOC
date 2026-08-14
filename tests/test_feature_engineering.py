@@ -3,8 +3,8 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime, UTC
 
-from ml.feature_engineering import compute_windowed_features
-from models import FeatureVector
+from backend.ml.feature_engineering import compute_windowed_features
+from backend.models import FeatureVector
 
 
 def test_compute_windowed_features_empty():
@@ -50,3 +50,4 @@ def test_compute_windowed_features_populated():
     assert fv.distinct_dest_ports == 4.0
     assert fv.dest_ip_fanout == 2.0
     assert fv.bytes_transferred == 1024.0
+

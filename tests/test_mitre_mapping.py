@@ -1,5 +1,5 @@
 import pytest
-from mitre.mapping_engine import MitreRuleEngine, get_technique
+from backend.mitre.mapping_engine import MitreRuleEngine, get_technique
 
 def test_brute_force_ssh_rule():
     engine = MitreRuleEngine()
@@ -70,3 +70,4 @@ def test_get_technique_fallback_works():
     unknown = get_technique("T9999")
     assert unknown["id"] == "T9999"
     assert unknown["name"]  # at minimum returns the ID as name
+

@@ -3,7 +3,7 @@ Unit tests for alert clustering logic.
 """
 
 import pytest
-from mitre.alert_clustering import cluster_events, _entity_key, _time_bucket
+from backend.mitre.alert_clustering import cluster_events, _entity_key, _time_bucket
 
 
 def test_cluster_by_entity_and_technique():
@@ -101,3 +101,4 @@ def test_cluster_fallback_context_from_events():
     clusters = cluster_events(events, None)
     assert len(clusters) == 1
     assert clusters[0]["entity"] == "10.0.0.1"
+

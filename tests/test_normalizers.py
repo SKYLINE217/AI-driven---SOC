@@ -17,12 +17,12 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from models import NormalizedEvent
-from ingestion.normalizers import get_normalizer, list_source_types
-from ingestion.normalizers.syslog_normalizer import normalize_syslog
-from ingestion.normalizers.cloudtrail_normalizer import normalize_cloudtrail
-from ingestion.normalizers.auth_log_normalizer import normalize_auth_log
-from ingestion.normalizers.cicids_normalizer import normalize_cicids
+from backend.models import NormalizedEvent
+from backend.ingestion.normalizers import get_normalizer, list_source_types
+from backend.ingestion.normalizers.syslog_normalizer import normalize_syslog
+from backend.ingestion.normalizers.cloudtrail_normalizer import normalize_cloudtrail
+from backend.ingestion.normalizers.auth_log_normalizer import normalize_auth_log
+from backend.ingestion.normalizers.cicids_normalizer import normalize_cicids
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -451,3 +451,4 @@ class TestNormalizerContract:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+

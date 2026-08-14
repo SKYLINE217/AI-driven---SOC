@@ -5,7 +5,7 @@ Handles:
   - In-memory state resets for feature_engineering and alert_clustering
 """
 import pytest
-import database
+from backend import database
 from pathlib import Path
 
 
@@ -98,3 +98,4 @@ def sample_triage_result():
         "severity": "high",
         "recommended_immediate_action": "Block IP and reset credentials.",
     }
+

@@ -3,7 +3,7 @@ Tests for the incident service — in-memory store, CRUD helpers, and ledger.
 """
 
 import pytest
-from api.incident_service import (
+from backend.api_legacy.incident_service import (
     seed_mock_data,
     get_alerts,
     get_alert,
@@ -128,3 +128,4 @@ def test_sorted_newest_first():
     result = get_alerts()
     timestamps = [a["created_at"] for a in result["items"]]
     assert timestamps == sorted(timestamps, reverse=True)
+
