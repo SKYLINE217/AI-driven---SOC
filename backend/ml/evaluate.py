@@ -82,22 +82,23 @@ def generate_synthetic_evaluation() -> dict:
 
 
 def compute_llm_metrics() -> dict:
-    """Pull LLM cost and latency from the in-memory log (if any calls made)."""
-    try:
-        from llm.triage_client import get_llm_call_stats
-        return get_llm_call_stats()
-    except Exception:
-        # Return realistic demo values if backend isn't running
-        return {
-            "total_calls": 0,
-            "total_cost_usd": 0.0,
-            "avg_latency_ms": 0.0,
-            "cost_per_1000_flagged": 0.0,
-            # Demo benchmark values from manual testing
-            "benchmark_avg_latency_ms": 1847,
-            "benchmark_p95_latency_ms": 4230,
-            "benchmark_cost_per_1k": 0.18,
-        }
+    """Pull LLM cost and latency from the in-memory log (if any calls made).
+
+    NOTE: The original llm.triage_client module was removed during the
+    pure-Python conversion (see SOC_PURE_PYTHON_CONVERSION_GUIDE.md).
+    This now returns static benchmark values; wire up to the live triage
+    service when real-time LLM cost tracking is implemented.
+    """
+    return {
+        "total_calls": 0,
+        "total_cost_usd": 0.0,
+        "avg_latency_ms": 0.0,
+        "cost_per_1000_flagged": 0.0,
+        # Demo benchmark values from manual testing
+        "benchmark_avg_latency_ms": 1847,
+        "benchmark_p95_latency_ms": 4230,
+        "benchmark_cost_per_1k": 0.18,
+    }
 
 
 def generate_report(metrics: dict, llm: dict, output_path: str) -> str:
