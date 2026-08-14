@@ -58,7 +58,7 @@ def _build_event_context(cluster: dict) -> dict:
 
 def _map_techniques_adapter(cluster: dict) -> dict:
     try:
-        from backend.mitre.mapping_engine import MitreRuleEngine, get_technique
+        from backend.mitre.mapping_engine import MitreRuleEngine
         ctx = _build_event_context(cluster)
         engine = MitreRuleEngine()
         candidates = engine.get_candidate_techniques(ctx)
@@ -118,8 +118,7 @@ def _generate_artifacts(incident: dict, output_dir: str):
             "user": "",
             "geo_country": "",
         })
-    for a in incident.get("alerts", [])[:3]:
-        pass
+
 
     rich_incident = dict(incident)
     rich_incident.setdefault("title", title)
@@ -239,7 +238,7 @@ def cmd_evaluate(args):
 
 
 def cmd_generate(args):
-    from pathlib import Path
+    import json
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -287,7 +286,6 @@ def cmd_generate(args):
             generate_normal_cloudtrail,
             generate_full_scenario,
         )
-        import json
         gen = generate_full_scenario(start_time=start)
         with output_path.open("w", encoding="utf-8") as f:
             for evt in gen:
@@ -431,4 +429,3 @@ if __name__ == "__main__":
     parser = build_parser()
     args = parser.parse_args()
     args.func(args)
-
