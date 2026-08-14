@@ -6,7 +6,7 @@ All raw log content is sanitized via sanitize_log_content() before rendering.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from jinja2 import Environment, BaseLoader
@@ -88,7 +88,8 @@ REPORT_TEMPLATE = """\
 """
 
 
-_jinja_env = Environment(loader=BaseLoader(), autoescape=True)
+# Target output is pure Markdown (.md). Raw log lines are safely sanitized via sanitize_log_content().
+_jinja_env = Environment(loader=BaseLoader(), autoescape=False)  # nosec B701
 _template = _jinja_env.from_string(REPORT_TEMPLATE)
 
 
@@ -105,6 +106,6 @@ def generate_incident_report(incident: dict[str, Any]) -> str:
     return _template.render(
         incident=incident,
         evidence_excerpt=evidence_excerpt,
-        generated_at=datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
 

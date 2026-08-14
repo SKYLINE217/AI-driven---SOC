@@ -85,21 +85,28 @@ def get_incident(incident_id: str) -> Optional[Dict[str, Any]]:
     return incident
 
 
-def list_incidents(limit=20, status=None, severity=None) -> List[Dict[str, Any]]:
+VALID_FILTERS = {
+    "status": "status = ?",
+    "severity": "severity = ?",
+}
+
+
+def list_incidents(limit: int = 20, status: Optional[str] = None, severity: Optional[str] = None) -> List[Dict[str, Any]]:
     database.init_db()
-    clauses, params = [], []
-    if status:
-        clauses.append("status = ?")
-        params.append(status)
-    if severity:
-        clauses.append("severity = ?")
-        params.append(severity)
-    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    filters = {}
+    if status is not None:
+        filters["status"] = status
+    if severity is not None:
+        filters["severity"] = severity
+
+    clauses = [VALID_FILTERS[k] for k in filters if k in VALID_FILTERS]
+    params = [filters[k] for k in filters if k in VALID_FILTERS]
+    where_sql = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+    query = "SELECT * FROM incidents" + where_sql + " ORDER BY created_at DESC LIMIT ?"
     params.append(limit)
+
     with database.get_connection() as conn:
-        rows = conn.execute(
-            f"SELECT * FROM incidents {where} ORDER BY created_at DESC LIMIT ?",
-            params).fetchall()
+        rows = conn.execute(query, params).fetchall()
     return [dict(r) for r in rows]
 
 

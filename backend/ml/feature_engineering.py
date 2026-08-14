@@ -126,6 +126,7 @@ def extract_features(event: Dict[str, Any]) -> np.ndarray:
 
 
 def reset_state():
+    """Reset all sliding window deques, spatial/network tracking, and hourly distributions."""
     _event_times.clear()
     _fail_times.clear()
     _dest_ports.clear()

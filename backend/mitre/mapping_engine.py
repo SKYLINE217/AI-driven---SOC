@@ -117,6 +117,65 @@ def map_techniques(events: list, top_features: list = None) -> dict:
         "tactic": meta.get("tactic", "Unknown"),
     }
 
+import ast
+import operator
+
+_SAFE_OPERATORS = {
+    ast.Eq: operator.eq,
+    ast.NotEq: operator.ne,
+    ast.Lt: operator.lt,
+    ast.LtE: operator.le,
+    ast.Gt: operator.gt,
+    ast.GtE: operator.ge,
+    ast.In: lambda a, b: a in b,
+    ast.NotIn: lambda a, b: a not in b,
+}
+
+
+def safe_eval_condition(condition_str: str, context: dict) -> bool:
+    """
+    Safely evaluate a rule condition string against a context dictionary using an AST whitelist.
+    Prevents arbitrary code execution or sandbox escapes.
+    """
+    try:
+        tree = ast.parse(condition_str, mode="eval")
+    except SyntaxError as e:
+        raise ValueError(f"Invalid condition syntax: {e}")
+
+    def _eval_node(node):
+        if isinstance(node, ast.Expression):
+            return _eval_node(node.body)
+        elif isinstance(node, ast.Constant):
+            return node.value
+        elif isinstance(node, ast.Name):
+            return context.get(node.id, None)
+        elif isinstance(node, ast.BoolOp):
+            if isinstance(node.op, ast.And):
+                return all(bool(_eval_node(v)) for v in node.values)
+            elif isinstance(node.op, ast.Or):
+                return any(bool(_eval_node(v)) for v in node.values)
+        elif isinstance(node, ast.UnaryOp):
+            if isinstance(node.op, ast.Not):
+                return not _eval_node(node.operand)
+        elif isinstance(node, ast.Compare):
+            left = _eval_node(node.left)
+            for op, comparator in zip(node.ops, node.comparators):
+                op_func = _SAFE_OPERATORS.get(type(op))
+                if not op_func:
+                    raise ValueError(f"Unsupported comparison operator: {type(op)}")
+                right = _eval_node(comparator)
+                if not op_func(left, right):
+                    return False
+                left = right
+            return True
+        elif isinstance(node, (ast.List, ast.Tuple)):
+            return [_eval_node(elem) for elem in node.elts]
+
+        raise ValueError(f"Disallowed expression element: {type(node).__name__}")
+
+    return bool(_eval_node(tree))
+
+
 class MitreRuleEngine:
     def __init__(self):
         with open(RULES_PATH, "r") as f:
@@ -125,9 +184,7 @@ class MitreRuleEngine:
 
     def get_candidate_techniques(self, event_context: dict) -> list[str]:
         candidates = set()
-        
-        # Build safe local environment for rule evaluation
-        # Add defaults to prevent NameError
+
         context = {
             "event_type": event_context.get("event_type", ""),
             "action": event_context.get("action", ""),
@@ -146,17 +203,16 @@ class MitreRuleEngine:
             "user": event_context.get("user", ""),
             "api_call": event_context.get("api_call", ""),
             "parent_process": event_context.get("parent_process", ""),
-            "process": event_context.get("process", "")
+            "process": event_context.get("process", ""),
         }
 
         for rule in self.rules:
             try:
-                # Basic eval is fine here since rules are internal config
-                if eval(rule["condition"], {"__builtins__": {}}, context):
+                if safe_eval_condition(rule["condition"], context):
                     candidates.add(rule["technique_id"])
             except Exception as e:
                 # Log error and continue if a rule fails to evaluate
-                print(f"Error evaluating rule {rule['id']}: {e}")
+                print(f"Error evaluating rule {rule.get('id', 'unknown')}: {e}")
 
         return list(candidates)
 

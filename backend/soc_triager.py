@@ -6,7 +6,7 @@ Usage: python -m backend.soc_triager <command> [options]
 """
 import argparse
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Ensure the repo root is on sys.path when run directly as a script
@@ -159,11 +159,15 @@ def _generate_artifacts(incident: dict, output_dir: str):
 
 def cmd_ingest(args):
     from backend.ingestion.file_ingestor import ingest_file
+    from backend.ml.feature_engineering import reset_state
     from backend.ml.scorer import score_events
     from backend.mitre.alert_clustering import cluster_alerts
     from backend.services.incident_service import create_incident
     from backend.services.triage import deterministic_triage
     from backend.display import print_incident_summary
+
+    # Reset sliding window state to avoid cross-run contamination
+    reset_state()
 
     events = ingest_file(args.file, source_type=args.source)
     if not events:
@@ -239,7 +243,7 @@ def cmd_generate(args):
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    start = datetime.utcnow()
+    start = datetime.now(timezone.utc)
     count_written = 0
 
     if args.type == "auth":

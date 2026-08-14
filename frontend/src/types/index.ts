@@ -52,6 +52,7 @@ export interface Incident {
   playbook_draft?: string
   playbook_approved?: boolean
   playbook_approved_by?: string
+  ledger?: LedgerEntry[]
 }
 
 export interface LedgerEntry {

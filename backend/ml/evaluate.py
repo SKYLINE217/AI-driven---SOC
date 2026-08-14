@@ -116,12 +116,15 @@ def generate_report(metrics: dict, llm: dict, output_path: str) -> str:
     flagged_per_day = int((tp + fp) / (metrics["total_samples"] / 86400))
     cost_per_day = round(flagged_per_day / 1000 * llm.get("benchmark_cost_per_1k", 0.18), 2)
 
-    # MITRE mapping accuracy (manual spot-check result)
-    mitre_accuracy_pct = 87  # 87% tactic-level correct from 10-alert spot check
+    is_synthetic = metrics.get("is_synthetic", True)
+    mode_badge = "> ℹ️ **Note:** This evaluation was generated using the calibrated synthetic baseline generator for benchmark validation." if is_synthetic else "> ✅ **Verified:** Evaluated against ground-truth dataset."
 
     report = f"""# SOC Triager — Evaluation Results
 
+{mode_badge}
+
 **Generated:** {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}  
+**Evaluation Mode:** {"Synthetic Calibration Baseline" if is_synthetic else "Empirical Test Dataset"}  
 **Dataset:** CICIDS2017 (Wednesday BENIGN + Friday DDoS/PortScan)  
 **Model:** Isolation Forest (0.6×) + Autoencoder (0.4×) ensemble  
 **Threshold:** {metrics["threshold"]}  
