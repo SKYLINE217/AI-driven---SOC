@@ -1,0 +1,18 @@
+# requirements_desktop.txt — SOC Triager Desktop (CustomTkinter stack)
+
+# Native GUI
+customtkinter>=5.2.2
+
+# Charts embedded in Tk
+matplotlib>=3.9.0
+
+# Already used by backend
+pydantic>=2.10.0
+pyyaml
+jinja2
+rich
+
+# Optional — ML training only (not needed for the desktop app)
+# scikit-learn
+# torch
+# numpy

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SOC Triager</title>
+  <meta name="description" content="AI-Driven Security Operations Centre — incident triage, MITRE ATT&CK navigator, and live alert feed." />
+  <link rel="stylesheet" href="/ui/style.css" />
+  <!-- Chart.js and Mermaid — served locally (no CDN dependency) -->
+  <script src="/ui/vendor/chart.umd.min.js"></script>
+  <script src="/ui/vendor/mermaid.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <nav id="sidebar"></nav>
+    <main id="main-content">
+      <div class="loading">Starting SOC Triager…</div>
+    </main>
+  </div>
+  <!-- Incident detail overlay (slide-in panel) -->
+  <div id="detail-overlay" style="display:none"></div>
+  <script src="/ui/app.js"></script>
+</body>
+</html>
