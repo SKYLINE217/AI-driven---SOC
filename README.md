@@ -71,6 +71,7 @@
 | 📋 **Artifact Generation** | Jinja2 Markdown reports, Mermaid attack graphs, Ansible playbooks — all sanitized |
 | 🔗 **Hash-Chained Ledger** | SHA-256 tamper-evident audit trail on every incident state change |
 | 📊 **Ops Dashboard** | Throughput, alert volume, score distribution, LLM latency/cost in Recharts |
+| 🖥️ **Desktop Client** | Standalone CustomTkinter pure-Python desktop app (No web stack required) |
 | 🛡️ **Containment Playbooks** | 6 Ansible playbooks for Brute Force, DDoS, Lateral Movement, PrivEsc, Exfil, Generic |
 | ☸️ **K8s Ready** | Helm charts for `faust-worker`, `scoring-api`, `incident-api` with HPAs |
 
@@ -457,11 +458,12 @@ soc-triager/
 | **Observability** | Prometheus + structlog | — | Metrics scraping + structured logs |
 | **Testing** | pytest + pytest-asyncio | 8.3.4 | 101-test suite |
 
-### Frontend
+### Frontend (Web & Desktop)
 
 | Layer | Technology | Version | Purpose |
 |---|---|---|---|
-| **Framework** | React | 19.2.8 | UI components |
+| **Web Framework** | React | 19.2.8 | UI components |
+| **Desktop GUI** | CustomTkinter | 5.2.2 | Pure-Python standalone native desktop app |
 | **Build Tool** | Vite | 8.2.1 | HMR dev server + production bundler |
 | **Language** | TypeScript | 6.0.2 | Type safety across the full stack |
 | **Routing** | React Router | 7.18.2 | Client-side SPA routing |
@@ -565,6 +567,16 @@ Click any of the three role buttons:
 - **Sign in as Analyst** — read-only, cannot approve playbooks
 - **Sign in as Senior Analyst** — escalation rights
 - **Sign in as Approver** — full approval authority
+
+### 8. (Alternative) Run the Desktop App
+
+If you prefer a standalone, pure-Python experience without the React/Vercel web stack, you can run the optimized CustomTkinter desktop application:
+
+```powershell
+pip install -r requirements_desktop.txt
+python main.py
+```
+This launches a fully functional native GUI that interacts directly with the local database.
 
 ---
 
