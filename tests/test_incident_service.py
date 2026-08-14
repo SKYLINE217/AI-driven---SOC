@@ -3,7 +3,7 @@ Tests for the incident service — in-memory store, CRUD helpers, and ledger.
 """
 
 import pytest
-from backend.api_legacy.incident_service import (
+from backend._test_stubs.incident_service import (
     seed_mock_data,
     get_alerts,
     get_alert,

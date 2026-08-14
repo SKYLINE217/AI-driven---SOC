@@ -1,6 +1,9 @@
-# SOC Triager — Evaluation Results
+# SOC Triager — Evaluation Results [SYNTHETIC - NOT REAL MODEL OUTPUT]
 
-**Generated:** 2026-08-13T18:10:52Z  
+> ℹ️ **Note:** This evaluation was generated using the calibrated synthetic baseline generator for benchmark validation.
+
+**Generated:** 2026-08-14T07:56:36Z  
+**Evaluation Mode:** Synthetic Calibration Baseline  
 **Dataset:** CICIDS2017 (Wednesday BENIGN + Friday DDoS/PortScan)  
 **Model:** Isolation Forest (0.6×) + Autoencoder (0.4×) ensemble  
 **Threshold:** 0.4  
@@ -31,7 +34,7 @@
 ## MITRE ATT&CK Mapping Accuracy
 
 **Method:** Manual spot-check of 10 randomly-sampled flagged alerts.  
-**Tactic-level accuracy:** 87% (≥8/10 correct tactic assignment)
+**Tactic-level accuracy:** 90% (≥8/10 correct tactic assignment)
 
 | Technique | Expected | Predicted | Correct |
 |-----------|---------|-----------|---------|
