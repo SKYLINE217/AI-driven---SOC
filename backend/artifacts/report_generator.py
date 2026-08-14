@@ -88,7 +88,7 @@ REPORT_TEMPLATE = """\
 """
 
 
-_jinja_env = Environment(loader=BaseLoader(), autoescape=False)
+_jinja_env = Environment(loader=BaseLoader(), autoescape=True)
 _template = _jinja_env.from_string(REPORT_TEMPLATE)
 
 
